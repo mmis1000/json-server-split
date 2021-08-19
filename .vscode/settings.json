@@ -1,0 +1,10 @@
+{
+  "workbench.colorCustomizations": {
+    "jsannotations.annotationForeground": "#555",
+    "activityBarBadge.background": "#0000",
+    "activityBarBadge.foreground": "#0000",
+    "activityBar.background": "#4B2219",
+    "titleBar.activeBackground": "#682F23",
+    "titleBar.activeForeground": "#FDF9F8"
+  }
+}
