@@ -14,6 +14,8 @@ import * as express from 'express'
 import type * as http from 'http'
 import { inspect } from 'util'
 import vm from 'vm'
+import customRouter from '../routes/custom-router'
+import assetsFixerInfo from '../routes/assets-fixer-info'
 
 const shimAppDb = (e: express.Application) => e as express.Application & { db: low.LowdbSync<any> }
 
@@ -66,6 +68,8 @@ function createApp(
 
   if (argv.static) {
     defaultsOpts.static = join(process.cwd(), argv.static)
+  } else {
+    defaultsOpts.static = resolve(__dirname, '../../public')
   }
 
   const defaults = _defaults(defaultsOpts)
@@ -85,52 +89,21 @@ function createApp(
   }
 
   if (argv.routers) {
-    console.log()
-    console.log(gray('  Loading routers from ', argv.routers))
+    app.use(customRouter(argv.routers))
+  }
 
-    const files = readdirSync(argv.routers)
-      .filter(JS)
-    
-    const infos = files.map(s => {
-      const route = '/' + s.replace(/\.js$/, '').split(/--/g).map(s => s.replace(/^_/, ':')).join('/')
-      const relativePath = join(argv.routers!, s)
-      const scriptPath = require.resolve(resolve(relativePath))
-      return {
-        route,
-        relativePath,
-        scriptPath
-      }
-    })
-
-    const router = express.Router()
-    
-    for (let info of infos) {
-      try {
-        delete require.cache[info.scriptPath]
-        const required = require(info.scriptPath)
-        console.log(gray(`  Adding route ${info.route} from ${info.relativePath}`))
-        router.use(info.route, required)
-      } catch (err) {
-        console.error(`Failed to require route file ${info.scriptPath}`)
-        console.error(inspect(err))
-        process.exit(1)
-      }
-    }
-
-    console.log(gray(`  Done`))
-    app.use(router)
+  if (argv['assets-url-map']) {
+    const map = JSON.parse(readFileSync(argv['assets-url-map'], 'utf8'))
+    app.use(assetsFixerInfo(map))
+    ;(router as any).render = createRender(
+      map,
+      argv['assets-url-base']
+    )
   }
 
   (router.db._ as unknown as Record<string, string>).id = argv.id
   shimAppDb(app).db = router.db
   app.use(router)
-
-  if (argv['assets-url-map']) {
-    (router as any).render = createRender(
-      JSON.parse(readFileSync(argv['assets-url-map'], 'utf8')),
-      argv['assets-url-base']
-    )
-  }
 
   return app
 }
