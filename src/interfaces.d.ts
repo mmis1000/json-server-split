@@ -1,5 +1,9 @@
 interface Argv {
-  _: string[]
+  _: (number|string)[]
+
+  'assets-url-map'?: string
+  'assets-url-base'?: string
+  'routers'?: string
 
   snapshots: string
   port: number
@@ -11,7 +15,7 @@ interface Argv {
   readOnly?: boolean;
   noCors?: boolean;
   noGzip?: boolean;
-  static?: string;
+  static?: string | undefined;
   delay?: number;
   foreignKeySuffix?: string
   routes?: string

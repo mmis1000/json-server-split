@@ -1,7 +1,6 @@
 export {
   FILE,
   JS,
-  URL,
 }
 
 function FILE(s: string) {

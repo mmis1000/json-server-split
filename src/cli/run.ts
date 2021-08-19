@@ -1,17 +1,19 @@
-import { existsSync, readFileSync, writeFileSync, watch } from 'fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync, watch } from 'fs'
 import { join, resolve, relative, dirname } from 'path'
 import { parse } from 'json-parse-helpfulerror'
 import { isEqual } from 'lodash'
 import { bold, cyan, gray, red, green } from 'chalk'
 import enableDestroy from 'server-destroy'
 import pause from 'connect-pause'
-import { URL, FILE } from './utils/is'
+import { FILE, JS } from './utils/is'
 import load from './utils/load'
-import { create, router as _router, defaults as _defaults, rewriter as _rewriter } from '../index'
+import { create, router as _router, defaults as _defaults, rewriter as _rewriter, createRender } from '../index'
 import * as low from 'lowdb'
 import type { MiddlewaresOptions } from 'json-server'
-import type * as express from 'express'
+import * as express from 'express'
 import type * as http from 'http'
+import { inspect } from 'util'
+import vm from 'vm'
 
 const shimAppDb = (e: express.Application) => e as express.Application & { db: low.LowdbSync<any> }
 
@@ -20,6 +22,7 @@ function prettyPrint(argv: Record<string, any>, object: Record<string, any>, rul
 
   console.log()
   console.log(bold('  Resources'))
+
   for (const prop in object) {
     console.log(`  ${root}/${prop}`)
   }
@@ -81,9 +84,53 @@ function createApp(
     app.use(pause(argv.delay))
   }
 
+  if (argv.routers) {
+    console.log()
+    console.log(gray('  Loading routers from ', argv.routers))
+
+    const files = readdirSync(argv.routers)
+      .filter(JS)
+    
+    const infos = files.map(s => {
+      const route = '/' + s.replace(/\.js$/, '').split(/--/g).map(s => s.replace(/^_/, ':')).join('/')
+      const relativePath = join(argv.routers!, s)
+      const scriptPath = require.resolve(resolve(relativePath))
+      return {
+        route,
+        relativePath,
+        scriptPath
+      }
+    })
+
+    const router = express.Router()
+    
+    for (let info of infos) {
+      try {
+        delete require.cache[info.scriptPath]
+        const required = require(info.scriptPath)
+        console.log(gray(`  Adding route ${info.route} from ${info.relativePath}`))
+        router.use(info.route, required)
+      } catch (err) {
+        console.error(`Failed to require route file ${info.scriptPath}`)
+        console.error(inspect(err))
+        process.exit(1)
+      }
+    }
+
+    console.log(gray(`  Done`))
+    app.use(router)
+  }
+
   (router.db._ as unknown as Record<string, string>).id = argv.id
   shimAppDb(app).db = router.db
   app.use(router)
+
+  if (argv['assets-url-map']) {
+    (router as any).render = createRender(
+      JSON.parse(readFileSync(argv['assets-url-map'], 'utf8')),
+      argv['assets-url-base']
+    )
+  }
 
   return app
 }
@@ -106,7 +153,20 @@ export default async function (argv: Argv) {
   console.log()
   console.log(cyan('  \\{^_^}/ hi!'))
 
-  async function start() {
+  let serverRestartQueue = Promise.resolve()
+  const restartServer = () => {
+    serverRestartQueue = serverRestartQueue.then(() => new Promise<void>(resolve => {
+      if (server) {
+        server && server.destroy(() => {
+          start(() => resolve())
+        })
+      } else {
+        resolve()
+      }
+    }))
+  }
+
+  async function start(cb?: () => void) {
     console.log()
 
     console.log(gray('  Loading', source))
@@ -114,7 +174,7 @@ export default async function (argv: Argv) {
     server = undefined
 
     // create db and load object, JSON file, JS or HTTP database
-    const sourceAdapter = await load(source)
+    const sourceAdapter = await load(String(source))
     const db = low.default(sourceAdapter as unknown as low.AdapterSync)
 
     // Load additional routes
@@ -138,7 +198,7 @@ export default async function (argv: Argv) {
 
     // Create app and server
     app = createApp(db, routes, middlewares, argv)
-    server = app.listen(argv.port, argv.host)
+    server = app.listen(argv.port, argv.host, cb)
 
     // Enhance with a destroy function
     enableDestroy(server)
@@ -201,26 +261,43 @@ export default async function (argv: Argv) {
       // Since lowdb uses atomic writing, directory is watched instead of file
       const watchedDir = source
       let readErrors = new Set<string>()
-      watch(watchedDir, (event, file) => {
+      watch(String(watchedDir), (event, file) => {
         // https://github.com/typicode/json-server/issues/420
         // file can be null
         if (file) {
-          const watchedFile = resolve(watchedDir, file)
-          if (FILE(watchedFile)) {
-            try {
-              parse(readFileSync(watchedFile, 'utf-8'))
-              if (readErrors.has(watchedFile)) {
-                console.log(green(`  Read error has been fixed :)`))
-                readErrors.delete(watchedFile)
+          const watchedFile = resolve(String(watchedDir), file)
+          if (FILE(watchedFile) || JS(watchedFile)) {
+            if (FILE(watchedFile)) {
+              try {
+                parse(readFileSync(watchedFile, 'utf-8'))
+                if (readErrors.has(watchedFile)) {
+                  console.log(green(`  Read error has been fixed :)`))
+                  readErrors.delete(watchedFile)
+                }
+              } catch (e) {
+                readErrors.add(watchedFile)
+                console.log(red(`  Error reading ${watchedFile}`))
+                console.error(e.message)
+                return
               }
-            } catch (e) {
-              readErrors.add(watchedFile)
-              console.log(red(`  Error reading ${watchedFile}`))
-              console.error(e.message)
-              return
+            } else /* if (JS(watchedFile)) */ {
+              try {
+                const file = readFileSync(watchedFile, 'utf-8')
+                new vm.Script(file, { filename: file })
+
+                if (readErrors.has(watchedFile)) {
+                  console.log(green(`  Read error has been fixed :)`))
+                  readErrors.delete(watchedFile)
+                }
+              } catch (e) {
+                readErrors.add(watchedFile)
+                console.log(red(`  Error reading ${watchedFile}`))
+                console.error(e.stack)
+                return
+              }
             }
 
-            // Compare .json file content with in memory database
+            // Compare old dir content with in memory database
             const isDatabaseDifferent = !isEqual(sourceAdapter.read(), shimAppDb(app).db.getState())
 
             if (isDatabaseDifferent) {
@@ -228,7 +305,8 @@ export default async function (argv: Argv) {
                 gray(`  ${source} has changed, reloading...`)
               )
 
-              server && server.destroy(() => start())
+              // server && server.destroy(() => start())
+              restartServer()
             }
           }
         }
@@ -244,8 +322,26 @@ export default async function (argv: Argv) {
               console.log(
                 gray(`  ${argv.routes} has changed, reloading...`)
               )
-              server && server.destroy(() => start())
+              // server && server.destroy(() => start())
+              restartServer()
             }
+          }
+        })
+      }
+
+      // Watch routers
+      if (argv.routers) {
+        const watchedDir = argv.routers
+        watch(watchedDir, (event, file) => {
+          if (file) {
+            const watchedFile = resolve(watchedDir, file)
+
+            console.log(
+              gray(`  ${watchedFile} has changed, reloading...`)
+            )
+
+            // server && server.destroy(() => start())
+            restartServer()
           }
         })
       }
