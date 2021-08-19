@@ -12,14 +12,19 @@ import * as low from 'lowdb'
 import type { MiddlewaresOptions } from 'json-server'
 import * as express from 'express'
 import type * as http from 'http'
-import { inspect } from 'util'
 import vm from 'vm'
-import customRouter from '../routes/custom-router'
+import customRouter, { RouteInfo } from '../routes/custom-router'
 import assetsFixerInfo from '../routes/assets-fixer-info'
 
 const shimAppDb = (e: express.Application) => e as express.Application & { db: low.LowdbSync<any> }
 
-function prettyPrint(argv: Record<string, any>, object: Record<string, any>, rules: Record<string, any>) {
+function prettyPrint(
+  argv: Record<string, any>,
+  object: Record<string, any>,
+  rules: Record<string, any>,
+  routers: RouteInfo[] | undefined,
+  assetsFixUpMap: Record<string, string[]> | undefined
+) {
   const root = `http://${argv.host}:${argv.port}`
 
   console.log()
@@ -29,11 +34,27 @@ function prettyPrint(argv: Record<string, any>, object: Record<string, any>, rul
     console.log(`  ${root}/${prop}`)
   }
 
+  if (routers) {
+    console.log()
+    console.log(bold('  Programmed routes'))
+    for (const rule of routers) {
+      console.log(`  ${root}${rule.route} -> ${rule.relativePath}`)
+    }
+  }
+
   if (rules) {
     console.log()
     console.log(bold('  Other routes'))
     for (const rule in rules) {
       console.log(`  ${rule} -> ${rules[rule]}`)
+    }
+  }
+
+  if (assetsFixUpMap) {
+    console.log()
+    console.log(bold('  Assets path fixups'))
+    for (const rule in assetsFixUpMap) {
+      console.log(`  ${rule} -> ${assetsFixUpMap[rule].join(', ')}`)
     }
   }
 
@@ -47,6 +68,8 @@ function createApp(
   db: low.LowdbSync<any>,
   routes: Record<string, string>,
   middlewares: express.RequestHandler,
+  routers: RouteInfo[] | undefined,
+  assetsFixUpMap: Record<string, string[]> | undefined,
   argv: Argv
 ) {
   const app = create()
@@ -88,15 +111,14 @@ function createApp(
     app.use(pause(argv.delay))
   }
 
-  if (argv.routers) {
-    app.use(customRouter(argv.routers))
+  if (routers) {
+    app.use(customRouter(routers))
   }
 
-  if (argv['assets-url-map']) {
-    const map = JSON.parse(readFileSync(argv['assets-url-map'], 'utf8'))
-    app.use(assetsFixerInfo(map))
+  if (assetsFixUpMap) {
+    app.use(assetsFixerInfo(assetsFixUpMap))
     ;(router as any).render = createRender(
-      map,
+      assetsFixUpMap,
       argv['assets-url-base']
     )
   }
@@ -166,18 +188,47 @@ export default async function (argv: Argv) {
       }) as unknown as express.RequestHandler
     }
 
+    let routers: RouteInfo[] | undefined = undefined
+    // Load custom route handlers
+    if (argv.routers) {
+      const files = readdirSync(argv.routers)
+        .filter(JS)
+
+      console.log(gray(`  Loading custom routes`))
+      routers = files.map(s => {
+        const route = '/' + s.replace(/\.js$/, '').split(/--/g).map(s => s.replace(/^_/, ':')).join('/')
+        const relativePath = join(argv.routers!, s)
+        const scriptPath = require.resolve(resolve(relativePath))
+        delete require.cache[scriptPath]
+        const handler = require(scriptPath)
+        console.log(gray(`    Adding route ${route} from ${relativePath}`))
+        return {
+          route,
+          relativePath,
+          handler
+        }
+      })
+    }
+
+    let assetsFixUpMap: Record<string, string[]> | undefined = undefined
+
+    if (argv['assets-url-map']) {
+      console.log(gray(`  Loading assets fixup map from ${argv['assets-url-map']}`))
+      assetsFixUpMap = JSON.parse(readFileSync(argv['assets-url-map'], 'utf8'))
+    }
+
     // Done
     console.log(gray('  Done'))
 
     // Create app and server
-    app = createApp(db, routes, middlewares, argv)
+    app = createApp(db, routes, middlewares, routers, assetsFixUpMap, argv)
     server = app.listen(argv.port, argv.host, cb)
 
     // Enhance with a destroy function
     enableDestroy(server)
 
     // Display server informations
-    prettyPrint(argv, db.getState(), routes)
+    prettyPrint(argv, db.getState(), routes, routers, assetsFixUpMap)
 
     // Catch and handle any error occurring in the server process
     process.on('uncaughtException', (error: any) => {
