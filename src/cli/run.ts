@@ -8,7 +8,7 @@ import pause from 'connect-pause'
 import { URL, FILE } from './utils/is'
 import load from './utils/load'
 import { create, router as _router, defaults as _defaults, rewriter as _rewriter } from '../index'
-import type * as low from 'lowdb'
+import * as low from 'lowdb'
 import type { MiddlewaresOptions } from 'json-server'
 import type * as express from 'express'
 import type * as http from 'http'
@@ -36,26 +36,6 @@ function prettyPrint(argv: Record<string, any>, object: Record<string, any>, rul
   console.log(bold('  Home'))
   console.log(`  ${root}`)
   console.log()
-}
-
-interface Argv {
-  _: string[]
-
-  snapshots: string
-  port: number
-  host: string
-  id: string;
-
-  watch?: boolean
-  quiet?: boolean;
-  readOnly?: boolean;
-  noCors?: boolean;
-  noGzip?: boolean;
-  static?: string;
-  delay?: number;
-  foreignKeySuffix?: string
-  routes?: string
-  middlewares?: string[]
 }
 
 function createApp(
@@ -108,7 +88,7 @@ function createApp(
   return app
 }
 
-export default function (argv: Argv) {
+export default async function (argv: Argv) {
   const source = argv._[0]
   let app: express.Application
   let server: http.Server | undefined
@@ -120,13 +100,13 @@ export default function (argv: Argv) {
 
   // noop log fn
   if (argv.quiet) {
-    console.log = () => {}
+    console.log = () => { }
   }
 
   console.log()
   console.log(cyan('  \\{^_^}/ hi!'))
 
-  function start() {
+  async function start() {
     console.log()
 
     console.log(gray('  Loading', source))
@@ -134,140 +114,144 @@ export default function (argv: Argv) {
     server = undefined
 
     // create db and load object, JSON file, JS or HTTP database
-    return load(source).then((db) => {
-      // Load additional routes
-      let routes
-      if (argv.routes) {
-        console.log(gray('  Loading', argv.routes))
-        routes = JSON.parse(readFileSync(argv.routes, 'utf-8'))
-      }
+    const sourceAdapter = await load(source)
+    const db = low.default(sourceAdapter as unknown as low.AdapterSync)
 
-      // Load middlewares
-      let middlewares!: express.RequestHandler
-      if (argv.middlewares) {
-        middlewares = argv.middlewares.map(function (m) {
-          console.log(gray('  Loading', m))
-          return require(resolve(m))
-        }) as unknown as express.RequestHandler
-      }
+    // Load additional routes
+    let routes
+    if (argv.routes) {
+      console.log(gray('  Loading', argv.routes))
+      routes = JSON.parse(readFileSync(argv.routes, 'utf-8'))
+    }
 
-      // Done
-      console.log(gray('  Done'))
+    // Load middlewares
+    let middlewares!: express.RequestHandler
+    if (argv.middlewares) {
+      middlewares = argv.middlewares.map(function (m) {
+        console.log(gray('  Loading', m))
+        return require(resolve(m))
+      }) as unknown as express.RequestHandler
+    }
 
-      // Create app and server
-      app = createApp(db, routes, middlewares, argv)
-      server = app.listen(argv.port, argv.host)
+    // Done
+    console.log(gray('  Done'))
 
-      // Enhance with a destroy function
-      enableDestroy(server)
+    // Create app and server
+    app = createApp(db, routes, middlewares, argv)
+    server = app.listen(argv.port, argv.host)
 
-      // Display server informations
-      prettyPrint(argv, db.getState(), routes)
+    // Enhance with a destroy function
+    enableDestroy(server)
 
-      // Catch and handle any error occurring in the server process
-      process.on('uncaughtException', (error: any) => {
-        if (error.errno === 'EADDRINUSE')
-          console.log(
-            red(
-              `Cannot bind to the port ${error.port}. Please specify another port number either through --port argument or through the json-server.json configuration file`
-            )
+    // Display server informations
+    prettyPrint(argv, db.getState(), routes)
+
+    // Catch and handle any error occurring in the server process
+    process.on('uncaughtException', (error: any) => {
+      if (error.errno === 'EADDRINUSE')
+        console.log(
+          red(
+            `Cannot bind to the port ${error.port}. Please specify another port number either through --port argument or through the json-server.json configuration file`
           )
-        else console.log('Some error occurred', error)
-        process.exit(1)
-      })
+        )
+      else
+        console.log('Some error occurred', error)
+      process.exit(1)
     })
+
+    return [sourceAdapter, db]
   }
 
-  // Start server
-  start()
-    .then(() => {
-      // Snapshot
-      console.log(
-        gray(
-          '  Type s + enter at any time to create a snapshot of the database'
-        )
-      )
+  try {
+    const [sourceAdapter, db] = await start()
 
-      // Support nohup
-      // https://github.com/typicode/json-server/issues/221
-      process.stdin.on('error', () => {
-        console.log(`  Error, can't read from stdin`)
-        console.log(`  Creating a snapshot from the CLI won't be possible`)
-      })
-      process.stdin.setEncoding('utf8')
-      process.stdin.on('data', (chunk: string) => {
-        if (chunk.trim().toLowerCase() === 's') {
-          const filename = `db-${Date.now()}.json`
-          const file = join(argv.snapshots, filename)
-          const state = shimAppDb(app).db.getState()
-          writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8')
-          console.log(
-            `  Saved snapshot to ${relative(process.cwd(), file)}\n`
-          )
+    // Snapshot
+    console.log(
+      gray(
+        '  Type s + enter at any time to create a snapshot of the database'
+      )
+    )
+
+    // Support nohup
+    // https://github.com/typicode/json-server/issues/221
+    process.stdin.on('error', () => {
+      console.log(`  Error, can't read from stdin`)
+      console.log(`  Creating a snapshot from the CLI won't be possible`)
+    })
+    process.stdin.setEncoding('utf8')
+    process.stdin.on('data', (chunk: string) => {
+      if (chunk.trim().toLowerCase() === 's') {
+        const filename = `db-${Date.now()}.json`
+        const file = join(argv.snapshots, filename)
+        const state = shimAppDb(app).db.getState()
+        writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8')
+        console.log(
+          `  Saved snapshot to ${relative(process.cwd(), file)}\n`
+        )
+      }
+    })
+
+    // Watch files
+    if (argv.watch) {
+      console.log(gray('  Watching...'))
+      console.log()
+      const source = argv._[0]
+
+      // Watch .js or .json file
+      // Since lowdb uses atomic writing, directory is watched instead of file
+      const watchedDir = source
+      let readErrors = new Set<string>()
+      watch(watchedDir, (event, file) => {
+        // https://github.com/typicode/json-server/issues/420
+        // file can be null
+        if (file) {
+          const watchedFile = resolve(watchedDir, file)
+          if (FILE(watchedFile)) {
+            try {
+              parse(readFileSync(watchedFile, 'utf-8'))
+              if (readErrors.has(watchedFile)) {
+                console.log(green(`  Read error has been fixed :)`))
+                readErrors.delete(watchedFile)
+              }
+            } catch (e) {
+              readErrors.add(watchedFile)
+              console.log(red(`  Error reading ${watchedFile}`))
+              console.error(e.message)
+              return
+            }
+
+            // Compare .json file content with in memory database
+            const isDatabaseDifferent = !isEqual(sourceAdapter.read(), shimAppDb(app).db.getState())
+
+            if (isDatabaseDifferent) {
+              console.log(
+                gray(`  ${source} has changed, reloading...`)
+              )
+
+              server && server.destroy(() => start())
+            }
+          }
         }
       })
 
-      // Watch files
-      if (argv.watch) {
-        console.log(gray('  Watching...'))
-        console.log()
-        const source = argv._[0]
-
-        // Watch .js or .json file
-        // Since lowdb uses atomic writing, directory is watched instead of file
-        const watchedDir = source
-        let readError = false
+      // Watch routes
+      if (argv.routes) {
+        const watchedDir = dirname(argv.routes)
         watch(watchedDir, (event, file) => {
-          // https://github.com/typicode/json-server/issues/420
-          // file can be null
           if (file) {
             const watchedFile = resolve(watchedDir, file)
-            if (FILE(watchedFile)) {
-              let obj
-              try {
-                obj = parse(readFileSync(watchedFile, 'utf-8'))
-                if (readError) {
-                  console.log(green(`  Read error has been fixed :)`))
-                  readError = false
-                }
-              } catch (e) {
-                readError = true
-                console.log(red(`  Error reading ${watchedFile}`))
-                console.error(e.message)
-                return
-              }
-
-              // Compare .json file content with in memory database
-              const isDatabaseDifferent = !isEqual(obj, shimAppDb(app).db.getState())
-              if (isDatabaseDifferent) {
-                console.log(
-                  gray(`  ${source} has changed, reloading...`)
-                )
-                server && server.destroy(() => start())
-              }
+            if (watchedFile === resolve(argv.routes as string)) {
+              console.log(
+                gray(`  ${argv.routes} has changed, reloading...`)
+              )
+              server && server.destroy(() => start())
             }
           }
         })
-
-        // Watch routes
-        if (argv.routes) {
-          const watchedDir = dirname(argv.routes)
-          watch(watchedDir, (event, file) => {
-            if (file) {
-              const watchedFile = resolve(watchedDir, file)
-              if (watchedFile === resolve(argv.routes as string)) {
-                console.log(
-                  gray(`  ${argv.routes} has changed, reloading...`)
-                )
-                server && server.destroy(() => start())
-              }
-            }
-          })
-        }
       }
-    })
-    .catch((err) => {
-      console.log(err)
-      process.exit(1)
-    })
+    }
+  } catch (err) {
+    console.log(err)
+    process.exit(1)
+  }
 }

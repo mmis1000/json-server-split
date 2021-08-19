@@ -4,8 +4,8 @@ import low from 'lowdb'
 import { yellow } from 'chalk'
 import SplitJSONAdapter from '@mmis1000/lowdb-split-json-adapter'
 
-export default function (dirname: string) {
-  return new Promise<low.LowdbSync<any>>((resolve, reject) => {
+export default function load (dirname: string) {
+  return new Promise<SplitJSONAdapter>((resolve, reject) => {
     if (dirname) {
       if (!existsSync(dirname)) {
         console.log(yellow(`  Oops, ${dirname} doesn't seem to exist`))
@@ -15,7 +15,7 @@ export default function (dirname: string) {
         // writeFileSync(dirname, JSON.stringify(example, null, 2))
       }
 
-      resolve(low(new SplitJSONAdapter(dirname) as any) as any)
+      resolve(new SplitJSONAdapter(dirname))
     } else {
       throw new Error(`Unsupported source ${dirname}`)
     }
