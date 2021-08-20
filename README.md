@@ -5,11 +5,12 @@ to make it suit for large project better.
 
 Most apis in `JSON Server` are keeps as is.
 
-The extension aims to allow users mock most of back-ends pattern with use the JSON server as a library and handle everything yourself.
+The extensions aim to allow users mock most of back-end patterns from command line instead of use `JSON Server` as a library and handle everything yourself.
 
 ## Table of contents
 
-- Extensions
+- [Usages](#usage)
+- [Extensions](#extensions)
   - [The db file structure](#the-db-file-structure)
   - [Programmed generation of certain db fields](#programmed-generation-of-certain-db-fields)
   - [Saved snapshot of generated data](#saved-snapshot-of-generated-data)
@@ -17,10 +18,79 @@ The extension aims to allow users mock most of back-ends pattern with use the JS
   - [Volatile record](#volatile-record)
   - [Custom routes](#custom-routes)
   - [Rewrite response to make url work](#rewrite-response-to-make-url-work)
-  - [Path in `--config` option now relatives to config file](#path-in-config-option-now-relatives-to-config-file)
+  - [Path in `--config` option now relatives to config file](#path-in---config-option-now-relatives-to-config-file)
   - [Watch works with middleware and anything need to be watched](#watch-works-with-middleware-and-anything-need-to-be-watched)
-- Caveats
+- [Caveats](caveats)
   - [Watch on js works partially](#watch-on-js-works-partially)
+
+## Usage
+
+```bash
+npx @mmis1000/json-server-split --help
+```
+
+```txt
+json-server-split [options] <source>
+
+Options:
+  -c, --config                   Path to config file, this won't be watched
+                                                                        [string]
+  -p, --port                     Set port               [number] [default: 3000]
+  -H, --host                     Set host        [string] [default: "localhost"]
+  -w, --watch                    Watch file(s)                         [boolean]
+  -r, --routes                   Path to routes file                    [string]
+  -m, --middlewares              Paths to middleware files               [array]
+  -s, --static                   Set static files directory             [string]
+      --read-only, --ro          Allow only GET requests               [boolean]
+      --no-cors, --nc            Disable Cross-Origin Resource Sharing [boolean]
+      --no-gzip, --ng            Disable GZIP Content-Encoding         [boolean]
+  -S, --snapshots                Set snapshots directory [string] [default: "."]
+  -d, --delay                    Add delay to responses (ms)            [number]
+  -i, --id                       Set database id property (e.g. _id)
+                                                        [string] [default: "id"]
+      --foreignKeySuffix, --fks  Set foreign key suffix (e.g. _id as in post_id)
+                                                        [string] [default: "Id"]
+  -q, --quiet                    Suppress log messages from output     [boolean]
+      --assets-url-map           Fixup map for assets url in response, use
+                                 alongside --static to create full functional
+                                 resource server. required for below option
+                                                                        [string]
+      --assets-url-base          New assets url base, defaults to request host
+                                 or `assets-url-header`                 [string]
+      --assets-url-header        Header to use as base path when header provided
+                                 by request, has higher priority then
+                                 `assets-url-base`
+                                             [string] [default: "ASSETS-PREFIX"]
+      --routers                  Dir for custom logic for handling routes,
+                                 happens before  the json and after the path
+                                 rewrite                                [string]
+  -h, --help                     Show help                             [boolean]
+  -v, --version                  Show version number                   [boolean]
+
+Examples:
+  json-server-split db/
+
+About The `--routers`
+
+  Route was determined by file name
+  Two hyphen was use as path separator
+  Dash at start of segment marks the segment as a param
+
+  Example router file name:
+    test.js => router.get('/test', expressHandler)
+    test-a.js => router.get('/test-a', expressHandler)
+    test--a.js => router.get('/test/a', expressHandler)
+    _arg--a.js => router.get('/:arg/a', expressHandler)
+    arg--_a.js => router.get('/arg/:a, expressHandler)
+
+Caveats
+
+  Watch against javascript files only works properly when the file itself
+  changed.
+  Change in file included indirectly need a full restart to take effect.
+
+https://github.com/mmis1000/json-server-split
+```
 
 ## Extensions
 

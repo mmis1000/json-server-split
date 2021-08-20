@@ -162,7 +162,7 @@ Caveats
   Watch against javascript files only works properly when the file itself changed.
   Change in file included indirectly need a full restart to take effect.
 
-https://github.com/typicode/json-server`)
+https://github.com/mmis1000/json-server-split`)
     .require(1, 'Missing <source> argument')
     .parseSync()
 
