@@ -117,7 +117,6 @@ export default function () {
         type: 'string',
         alias: 'c',
         description: 'Path to config file',
-        default: 'json-server.json',
       },
       'assets-url-map': {
         type: 'string',
