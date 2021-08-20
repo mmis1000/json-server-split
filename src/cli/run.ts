@@ -1,21 +1,21 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
-import { join, resolve, relative, dirname } from 'path'
-import { parse } from 'json-parse-helpfulerror'
-import { isEqual } from 'lodash'
-import { bold, cyan, gray, red, green } from 'chalk'
-import enableDestroy from 'server-destroy'
+import { bold, cyan, gray, green, red } from 'chalk'
+import { watch } from 'chokidar'
 import pause from 'connect-pause'
+import * as express from 'express'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import type * as http from 'http'
+import { parse } from 'json-parse-helpfulerror'
+import type { MiddlewaresOptions } from 'json-server'
+import { isEqual } from 'lodash'
+import * as low from 'lowdb'
+import { join, relative, resolve } from 'path'
+import enableDestroy from 'server-destroy'
+import vm from 'vm'
+import { create, createRender, defaults as _defaults, rewriter as _rewriter, router as _router } from '../index'
+import assetsFixerInfo from '../routes/assets-fixer-info'
+import customRouter, { RouteInfo } from '../routes/custom-router'
 import { FILE, JS } from './utils/is'
 import load from './utils/load'
-import { create, router as _router, defaults as _defaults, rewriter as _rewriter, createRender } from '../index'
-import * as low from 'lowdb'
-import type { MiddlewaresOptions } from 'json-server'
-import * as express from 'express'
-import type * as http from 'http'
-import vm from 'vm'
-import customRouter, { RouteInfo } from '../routes/custom-router'
-import assetsFixerInfo from '../routes/assets-fixer-info'
-import { watch } from 'chokidar'
 
 const shimAppDb = (e: express.Application) => e as express.Application & { db: low.LowdbSync<any> }
 
@@ -153,11 +153,12 @@ export default async function (argv: Argv) {
   console.log(cyan('  \\{^_^}/ hi!'))
 
   let serverRestartQueue = Promise.resolve()
+
   const restartServer = () => {
     serverRestartQueue = serverRestartQueue.then(() => new Promise<void>(resolve => {
       if (server) {
         server && server.destroy(() => {
-          start(() => resolve())
+          start(() => resolve(), true)
         })
       } else {
         resolve()
@@ -165,7 +166,7 @@ export default async function (argv: Argv) {
     }))
   }
 
-  async function start(cb?: () => void) {
+  async function start(cb?: () => void, isRestart?: boolean) {
     console.log()
 
     console.log(gray('  Loading', source))
@@ -235,17 +236,19 @@ export default async function (argv: Argv) {
     prettyPrint(argv, db.getState(), routes, routers, assetsFixUpMap)
 
     // Catch and handle any error occurring in the server process
-    process.on('uncaughtException', (error: any) => {
-      if (error.errno === 'EADDRINUSE')
-        console.log(
-          red(
-            `Cannot bind to the port ${error.port}. Please specify another port number either through --port argument or through the json-server.json configuration file`
+    if (!isRestart) {
+      process.on('uncaughtException', (error: any) => {
+        if (error.errno === 'EADDRINUSE')
+          console.log(
+            red(
+              `Cannot bind to the port ${error.port}. Please specify another port number either through --port argument or through the json-server.json configuration file`
+            )
           )
-        )
-      else
-        console.log('Some error occurred', error)
-      process.exit(1)
-    })
+        else
+          console.log('Some error occurred', error)
+        process.exit(1)
+      })
+    }
 
     return [sourceAdapter, db]
   }
@@ -287,68 +290,67 @@ export default async function (argv: Argv) {
 
       // Watch .js or .json file
       // Since lowdb uses atomic writing, directory is watched instead of file
-      const watchedDir = source
+      const watchedDir = String(source)
       let readErrors = new Set<string>()
+
       watch(
-        resolve(String(watchedDir)),
+        resolve(watchedDir),
         {
           ignoreInitial: true,
-          cwd: resolve(String(watchedDir))
+          cwd: resolve(watchedDir)
         }
       ).on('all', (event, file) => {
-        // https://github.com/typicode/json-server/issues/420
-        // file can be null
-        console.log(event, file, resolve(String(watchedDir), file))
-        if (file) {
-          const watchedFile = resolve(String(watchedDir), file)
-          if (FILE(watchedFile) || JS(watchedFile)) {
-            if (existsSync(resolve(String(watchedDir), file))) {
-              if (FILE(watchedFile)) {
-                try {
-                  parse(readFileSync(watchedFile, 'utf-8'))
-                  if (readErrors.has(watchedFile)) {
-                    console.log(green(`  Read error has been fixed :)`))
-                    readErrors.delete(watchedFile)
-                  }
-                } catch (e) {
-                  readErrors.add(watchedFile)
-                  console.log(red(`  Error reading ${watchedFile}`))
-                  console.error(e.message)
-                  return
-                }
-              } else /* if (JS(watchedFile)) */ {
-                try {
-                  const file = readFileSync(watchedFile, 'utf-8')
-                  new vm.Script(file, { filename: file })
+        const watchedFile = resolve(watchedDir, file)
 
-                  if (readErrors.has(watchedFile)) {
-                    console.log(green(`  Read error has been fixed :)`))
-                    readErrors.delete(watchedFile)
-                  }
-                } catch (e) {
-                  readErrors.add(watchedFile)
-                  console.log(red(`  Error reading ${watchedFile}`))
-                  console.error(e.stack)
-                  return
+        if (FILE(watchedFile) || JS(watchedFile)) {
+          if (existsSync(resolve(watchedDir, file))) {
+            if (FILE(watchedFile)) {
+              try {
+                parse(readFileSync(watchedFile, 'utf-8'))
+                if (readErrors.has(watchedFile)) {
+                  console.log(green(`  Read error has been fixed :)`))
+                  readErrors.delete(watchedFile)
                 }
+              } catch (e) {
+                readErrors.add(watchedFile)
+                console.log(red(`  Error reading ${watchedFile}`))
+                console.error(e.message)
+                return
               }
-            } else {
-              console.log(
-                gray(`  ${file} has been removed`)
-              )
+            } else /* if (JS(watchedFile)) */ {
+              try {
+                const file = readFileSync(watchedFile, 'utf-8')
+                new vm.Script(file, { filename: file })
+
+                if (readErrors.has(watchedFile)) {
+                  console.log(green(`  Read error has been fixed :)`))
+                  readErrors.delete(watchedFile)
+                }
+              } catch (e) {
+                readErrors.add(watchedFile)
+                console.log(red(`  Error reading ${watchedFile}`))
+                console.error(e.stack)
+                return
+              }
             }
+          } else {
+            console.log(
+              gray(`  ${file} has been removed`)
+            )
+          }
 
-            // Compare old dir content with in memory database
-            const isDatabaseDifferent = !isEqual(sourceAdapter.read(), shimAppDb(app).db.getState())
+          // Compare old dir content with in memory database
+          const latestSource = sourceAdapter.read()
+          const isDatabaseDifferent = !isEqual(latestSource, shimAppDb(app).db.getState())
 
-            if (isDatabaseDifferent) {
-              console.log(
-                gray(`  ${file} has changed, reloading...`)
-              )
+          if (isDatabaseDifferent) {
+            console.log(
+              gray(`  ${file} has changed, reloading...`)
+            )
 
-              // server && server.destroy(() => start())
-              restartServer()
-            }
+            // server && server.destroy(() => start())
+            // restartServer()
+            shimAppDb(app).db.setState(latestSource)
           }
         }
       })
@@ -374,9 +376,30 @@ export default async function (argv: Argv) {
         })
       }
 
+
+      // Watch routers
+      if (argv.middlewares) {
+        const middlewares = argv.middlewares
+        watch(
+          middlewares.map(it => resolve(it)),
+          {
+            ignoreInitial: true
+          }
+        ).on('all', (event, file) => {
+          console.log(
+            gray(`  ${file} has changed, reloading...`)
+          )
+
+          delete require.cache[require.resolve(resolve(file))]
+
+          // server && server.destroy(() => start())
+          restartServer()
+        })
+      }
+
       // Watch routes
       if (argv.routes) {
-        watch(resolve(argv.routes), { ignoreInitial: true }).on('all', (event, file) => {
+        watch(resolve(argv.routes), { ignoreInitial: true }).on('all', () => {
           console.log(
             gray(`  ${argv.routes} has changed, reloading...`)
           )
@@ -384,12 +407,10 @@ export default async function (argv: Argv) {
       }
       // Watch assets fixups
       if (argv['assets-url-map']) {
-        watch(resolve(argv['assets-url-map']), { ignoreInitial: true }).on('all', (event, file) => {
-          if (file) {
-            console.log(
-              gray(`  ${argv.routes} has changed, reloading...`)
-            )
-          }
+        watch(resolve(argv['assets-url-map']), { ignoreInitial: true }).on('all', () => {
+          console.log(
+            gray(`  ${argv.routes} has changed, reloading...`)
+          )
         })
       }
     }
