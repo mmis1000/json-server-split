@@ -314,11 +314,13 @@ const new = fixAssetsPath(
   // fields need to be rewritten
   ["url"]
 )
-/*{
-  "url": "http://example.com/a.png",
-  "a": "b.png"
-}
-*/
+
+/*
+ * {
+ *  "url": "http://example.com/a.png",
+ *  "a": "b.png"
+ * }
+ */
 ```
 
 ## Caveats
