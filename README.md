@@ -20,6 +20,9 @@ The extensions aim to allow users mock most of back-end patterns from command li
   - [Rewrite response to make url work](#rewrite-response-to-make-url-work)
   - [Path in `--config` option now relatives to config file](#path-in---config-option-now-relatives-to-config-file)
   - [Watch works with middleware and anything need to be watched](#watch-works-with-middleware-and-anything-need-to-be-watched)
+- [Programmed usage](#programmed-usage)
+  - [As a `JSON Server` `render` function](#as-a-json-server-render-function)
+  - [As a util function](#as-a-util-function)
 - [Caveats](caveats)
   - [Watch on js works partially](#watch-on-js-works-partially)
 
@@ -337,7 +340,7 @@ config.json
 
 ### Watch works with middleware and anything need to be watched
 
-**(See also Caveats, reload js file still has some limitation)**
+**(See also [caveats](#watch-on-js-works-partially), reload js file still has some limitation)**
 
 All files are watched now.
 Include newly added `--routers` , `--assets-url-map`.
