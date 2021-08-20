@@ -116,7 +116,7 @@ export default function () {
       config: {
         type: 'string',
         alias: 'c',
-        description: 'Path to config file',
+        description: 'Path to config file, this won\'t be watched',
       },
       'assets-url-map': {
         type: 'string',

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync, watch } from 'fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join, resolve, relative, dirname } from 'path'
 import { parse } from 'json-parse-helpfulerror'
 import { isEqual } from 'lodash'
@@ -15,6 +15,7 @@ import type * as http from 'http'
 import vm from 'vm'
 import customRouter, { RouteInfo } from '../routes/custom-router'
 import assetsFixerInfo from '../routes/assets-fixer-info'
+import { watch } from 'chokidar'
 
 const shimAppDb = (e: express.Application) => e as express.Application & { db: low.LowdbSync<any> }
 
@@ -120,10 +121,10 @@ function createApp(
 
   if (assetsFixUpMap) {
     app.use(assetsFixerInfo(assetsFixUpMap))
-    ;(router as any).render = createRender(
-      assetsFixUpMap,
-      argv['assets-url-base']
-    )
+      ; (router as any).render = createRender(
+        assetsFixUpMap,
+        argv['assets-url-base']
+      )
   }
 
   (router.db._ as unknown as Record<string, string>).id = argv.id
@@ -288,40 +289,53 @@ export default async function (argv: Argv) {
       // Since lowdb uses atomic writing, directory is watched instead of file
       const watchedDir = source
       let readErrors = new Set<string>()
-      watch(String(watchedDir), (event, file) => {
+      watch(
+        resolve(String(watchedDir)),
+        {
+          ignoreInitial: true,
+          cwd: resolve(String(watchedDir))
+        }
+      ).on('all', (event, file) => {
         // https://github.com/typicode/json-server/issues/420
         // file can be null
+        console.log(event, file, resolve(String(watchedDir), file))
         if (file) {
           const watchedFile = resolve(String(watchedDir), file)
           if (FILE(watchedFile) || JS(watchedFile)) {
-            if (FILE(watchedFile)) {
-              try {
-                parse(readFileSync(watchedFile, 'utf-8'))
-                if (readErrors.has(watchedFile)) {
-                  console.log(green(`  Read error has been fixed :)`))
-                  readErrors.delete(watchedFile)
+            if (existsSync(resolve(String(watchedDir), file))) {
+              if (FILE(watchedFile)) {
+                try {
+                  parse(readFileSync(watchedFile, 'utf-8'))
+                  if (readErrors.has(watchedFile)) {
+                    console.log(green(`  Read error has been fixed :)`))
+                    readErrors.delete(watchedFile)
+                  }
+                } catch (e) {
+                  readErrors.add(watchedFile)
+                  console.log(red(`  Error reading ${watchedFile}`))
+                  console.error(e.message)
+                  return
                 }
-              } catch (e) {
-                readErrors.add(watchedFile)
-                console.log(red(`  Error reading ${watchedFile}`))
-                console.error(e.message)
-                return
-              }
-            } else /* if (JS(watchedFile)) */ {
-              try {
-                const file = readFileSync(watchedFile, 'utf-8')
-                new vm.Script(file, { filename: file })
+              } else /* if (JS(watchedFile)) */ {
+                try {
+                  const file = readFileSync(watchedFile, 'utf-8')
+                  new vm.Script(file, { filename: file })
 
-                if (readErrors.has(watchedFile)) {
-                  console.log(green(`  Read error has been fixed :)`))
-                  readErrors.delete(watchedFile)
+                  if (readErrors.has(watchedFile)) {
+                    console.log(green(`  Read error has been fixed :)`))
+                    readErrors.delete(watchedFile)
+                  }
+                } catch (e) {
+                  readErrors.add(watchedFile)
+                  console.log(red(`  Error reading ${watchedFile}`))
+                  console.error(e.stack)
+                  return
                 }
-              } catch (e) {
-                readErrors.add(watchedFile)
-                console.log(red(`  Error reading ${watchedFile}`))
-                console.error(e.stack)
-                return
               }
+            } else {
+              console.log(
+                gray(`  ${file} has been removed`)
+              )
             }
 
             // Compare old dir content with in memory database
@@ -329,7 +343,7 @@ export default async function (argv: Argv) {
 
             if (isDatabaseDifferent) {
               console.log(
-                gray(`  ${source} has changed, reloading...`)
+                gray(`  ${file} has changed, reloading...`)
               )
 
               // server && server.destroy(() => start())
@@ -339,52 +353,42 @@ export default async function (argv: Argv) {
         }
       })
 
+      // Watch routers
+      if (argv.routers) {
+        const watchedDir = argv.routers
+        watch(
+          resolve(String(watchedDir)),
+          {
+            ignoreInitial: true,
+            cwd: resolve(String(watchedDir))
+          }
+        ).on('all', (event, file) => {
+          const watchedFile = resolve(watchedDir, file)
+
+          console.log(
+            gray(`  ${watchedFile} has changed, reloading...`)
+          )
+
+          // server && server.destroy(() => start())
+          restartServer()
+        })
+      }
+
       // Watch routes
       if (argv.routes) {
-        const watchedDir = dirname(argv.routes)
-        watch(watchedDir, (event, file) => {
-          if (file) {
-            const watchedFile = resolve(watchedDir, file)
-            if (watchedFile === resolve(argv.routes as string)) {
-              console.log(
-                gray(`  ${argv.routes} has changed, reloading...`)
-              )
-              // server && server.destroy(() => start())
-              restartServer()
-            }
-          }
+        watch(resolve(argv.routes), { ignoreInitial: true }).on('all', (event, file) => {
+          console.log(
+            gray(`  ${argv.routes} has changed, reloading...`)
+          )
         })
       }
       // Watch assets fixups
       if (argv['assets-url-map']) {
-        const watchedDir = dirname(argv['assets-url-map'])
-        watch(watchedDir, (event, file) => {
+        watch(resolve(argv['assets-url-map']), { ignoreInitial: true }).on('all', (event, file) => {
           if (file) {
-            const watchedFile = resolve(watchedDir, file)
-            if (watchedFile === resolve(argv['assets-url-map'] as string)) {
-              console.log(
-                gray(`  ${argv.routes} has changed, reloading...`)
-              )
-              // server && server.destroy(() => start())
-              restartServer()
-            }
-          }
-        })
-      }
-
-      // Watch routers
-      if (argv.routers) {
-        const watchedDir = argv.routers
-        watch(watchedDir, (event, file) => {
-          if (file) {
-            const watchedFile = resolve(watchedDir, file)
-
             console.log(
-              gray(`  ${watchedFile} has changed, reloading...`)
+              gray(`  ${argv.routes} has changed, reloading...`)
             )
-
-            // server && server.destroy(() => start())
-            restartServer()
           }
         })
       }
