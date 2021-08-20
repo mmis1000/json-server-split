@@ -46,7 +46,7 @@ function prettyPrint(
     console.log()
     console.log(bold('  Other routes'))
     for (const rule in rules) {
-      console.log(`  ${rule} -> ${rules[rule]}`)
+      console.log(`  ${root}${rule} -> ${rules[rule]}`)
     }
   }
 
@@ -92,7 +92,10 @@ function createApp(
   if (argv.static) {
     defaultsOpts.static = join(process.cwd(), argv.static)
   } else {
-    defaultsOpts.static = resolve(__dirname, '../../public')
+    const userDir = join(process.cwd(), 'public')
+    const defaultDir = join(__dirname, '../../public')
+    const staticDir = existsSync(userDir) ? userDir : defaultDir
+    defaultsOpts.static = staticDir
   }
 
   const defaults = _defaults(defaultsOpts)
@@ -343,6 +346,22 @@ export default async function (argv: Argv) {
           if (file) {
             const watchedFile = resolve(watchedDir, file)
             if (watchedFile === resolve(argv.routes as string)) {
+              console.log(
+                gray(`  ${argv.routes} has changed, reloading...`)
+              )
+              // server && server.destroy(() => start())
+              restartServer()
+            }
+          }
+        })
+      }
+      // Watch assets fixups
+      if (argv['assets-url-map']) {
+        const watchedDir = dirname(argv['assets-url-map'])
+        watch(watchedDir, (event, file) => {
+          if (file) {
+            const watchedFile = resolve(watchedDir, file)
+            if (watchedFile === resolve(argv['assets-url-map'] as string)) {
               console.log(
                 gray(`  ${argv.routes} has changed, reloading...`)
               )

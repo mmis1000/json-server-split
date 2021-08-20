@@ -5,10 +5,13 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "watch": "tsc --watch"
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "prepublishOnly": "npm build ."
   },
   "author": "",
   "license": "ISC",
+  "bin": "./lib/cli/bin.js",
   "dependencies": {
     "@mmis1000/lowdb-split-json-adapter": "^0.1.4",
     "@types/yargs": "^17.0.2",

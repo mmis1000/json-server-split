@@ -1,8 +1,14 @@
 interface Argv {
+  config?: string
+
   _: (number|string)[]
 
   'assets-url-map'?: string
+  assetsUrlMap?: string
+
   'assets-url-base'?: string
+  assetsUrlBase?: string
+
   'routers'?: string
 
   snapshots: string
@@ -12,9 +18,16 @@ interface Argv {
 
   watch?: boolean
   quiet?: boolean;
+
+  'read-only'?: boolean;
   readOnly?: boolean;
+
+  'no-cors'?: boolean;
   noCors?: boolean;
+
+  'no-gzip'?: boolean;
   noGzip?: boolean;
+
   static?: string | undefined;
   delay?: number;
   foreignKeySuffix?: string

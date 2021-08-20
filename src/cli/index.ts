@@ -1,13 +1,40 @@
 import updateNotifier from 'update-notifier'
-import { config as _config } from 'yargs'
+import { config } from 'yargs'
 import run from './run'
+import fs from 'fs'
+import { resolve, relative } from 'path'
+
 // @ts-ignore
 import pkg = require('../../package.json')
+
+const pathKeys: (keyof Argv)[] = [
+  'assets-url-map',
+  'assetsUrlMap',
+
+  'middlewares',
+  'static',
+  'routes',
+  'routers'
+]
 
 export default function () {
   updateNotifier({ pkg }).notify()
 
-  const argv = _config('config')
+  const argv = config(
+    'config',  
+    function (configPath) {
+      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+
+      const base = resolve(process.cwd(), configPath, '../')
+
+      for (const key of pathKeys) {
+        if (Object.prototype.hasOwnProperty.call(parsed, key)) {
+          parsed[key] = relative(process.cwd(), resolve(base, parsed[key]))
+        }
+      }
+
+      return parsed
+    })
     .usage('$0 [options] <source>')
     .options({
       port: {
