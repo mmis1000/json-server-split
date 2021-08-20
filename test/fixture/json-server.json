@@ -1,0 +1,6 @@
+{
+  "watch": true,
+  "assets-url-map": "assetsPaths.json",
+  "routes": "routes.json",
+  "routers": "routers"
+}
