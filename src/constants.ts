@@ -1,1 +1,1 @@
-export const BASE_URL_HEADER = 'ASSETS_PREFIX'
+export const BASE_URL_HEADER = 'ASSETS-PREFIX'

@@ -120,11 +120,12 @@ function createApp(
   }
 
   if (assetsFixUpMap) {
-    app.use(assetsFixerInfo(assetsFixUpMap))
-      ; (router as any).render = createRender(
-        assetsFixUpMap,
-        argv['assets-url-base']
-      )
+    app.use(assetsFixerInfo(assetsFixUpMap));
+    (router as any).render = createRender(
+      assetsFixUpMap,
+      argv['assets-url-base'],
+      argv['assets-url-header']
+    )
   }
 
   (router.db._ as unknown as Record<string, string>).id = argv.id

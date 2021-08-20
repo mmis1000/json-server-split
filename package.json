@@ -1,8 +1,8 @@
 {
   "name": "@mmis1000/json-server-split",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "",
-  "main": "index.js",
+  "main": "./lib/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",

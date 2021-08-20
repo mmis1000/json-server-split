@@ -9,6 +9,9 @@ interface Argv {
   'assets-url-base'?: string
   assetsUrlBase?: string
 
+  'assets-url-header': string
+  // assetsUrlHeader: string
+
   'routers'?: string
 
   snapshots: string

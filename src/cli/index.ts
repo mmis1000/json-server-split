@@ -6,6 +6,7 @@ import { resolve, relative } from 'path'
 
 // @ts-ignore
 import pkg = require('../../package.json')
+import { BASE_URL_HEADER } from '../constants'
 
 const pathKeys: (keyof Argv)[] = [
   'assets-url-map',
@@ -124,7 +125,12 @@ export default function () {
       },
       'assets-url-base': {
         type: 'string',
-        description: 'New assets url base, defaults to request host or `ASSETS_PREFIX` header if not set',
+        description: 'New assets url base, defaults to request host or `assets-url-header`',
+      },
+      'assets-url-header': {
+        type: 'string',
+        default: BASE_URL_HEADER,
+        description: 'Header to use as base path when header provided by request, has higher priority then `assets-url-base`',
       },
       routers: {
         type: 'string',
@@ -135,7 +141,7 @@ export default function () {
     .alias('help', 'h')
     .version(pkg.version)
     .alias('version', 'v')
-    .example('$0 db', '')
+    .example('$0 db/', '')
     // .example('$0 file.js', '')
     // .example('$0 http://example.com/db.json', '')
     .epilog(`About The \`--routers\`
@@ -150,6 +156,11 @@ export default function () {
     test--a.js => router.get('/test/a', expressHandler)
     _arg--a.js => router.get('/:arg/a', expressHandler)
     arg--_a.js => router.get('/arg/:a, expressHandler)
+
+Caveats
+
+  Watch against javascript files only works properly when the file itself changed.
+  Change in file included indirectly need a full restart to take effect.
 
 https://github.com/typicode/json-server`)
     .require(1, 'Missing <source> argument')

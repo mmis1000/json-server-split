@@ -8,12 +8,12 @@ export const router = jsonServer.router
 export const rewriter = jsonServer.rewriter
 export const defaults = jsonServer.defaults
 export const create = jsonServer.create
-export const createRender = (pathMap: Record<string, string[]>, basePath?: string) => {
+export const createRender = (pathMap: Record<string, string[]>, basePath?: string, HEADER?: string) => {
   return function render(req: express.Request, res: express.Response) {
     const base = basePath != null
       ? basePath
-      : req.get(BASE_URL_HEADER) != null
-        ? req.get(BASE_URL_HEADER)!
+      : req.get(HEADER || BASE_URL_HEADER) != null
+        ? req.get(HEADER || BASE_URL_HEADER)!
         : req.protocol + '://' + req.get('host')
 
     const pathParsed: {
@@ -34,3 +34,4 @@ export const createRender = (pathMap: Record<string, string[]>, basePath?: strin
     res.jsonp(res.locals.data)
   }
 }
+export { fixAssetsPath } from './assets-path-fixer';
