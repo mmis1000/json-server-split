@@ -2,7 +2,7 @@ import { bold, cyan, gray, green, red } from 'chalk'
 import { watch } from 'chokidar'
 import pause from 'connect-pause'
 import * as express from 'express'
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync, statSync } from 'fs'
 import type * as http from 'http'
 import { parse } from 'json-parse-helpfulerror'
 import type { MiddlewaresOptions } from 'json-server'
@@ -11,13 +11,30 @@ import * as low from 'lowdb'
 import { join, relative, resolve } from 'path'
 import enableDestroy from 'server-destroy'
 import vm from 'vm'
+import { HookNames } from '../constants'
 import { create, createRender, defaults as _defaults, rewriter as _rewriter, router as _router } from '../index'
+import { Argv, HookContext, Hooks, RouteInfo } from '../interfaces'
 import assetsFixerInfo from '../routes/assets-fixer-info'
-import customRouter, { RouteInfo } from '../routes/custom-router'
+import customRouter from '../routes/custom-router'
 import { FILE, JS } from './utils/is'
 import load from './utils/load'
 
 const shimAppDb = (e: express.Application) => e as express.Application & { db: low.LowdbSync<any> }
+
+function runHook(
+  name: HookNames,
+  hooks: Hooks[],
+  hookContext: HookContext,
+  cb: () => void
+) {
+  for (const hook of hooks) {
+    hook[`pre_${name}` as const]?.(hookContext)
+  }
+  cb()
+  for (const hook of hooks) {
+    hook[`post_${name}` as const]?.(hookContext)
+  }
+}
 
 function prettyPrint(
   argv: Record<string, any>,
@@ -68,12 +85,15 @@ function prettyPrint(
 function createApp(
   db: low.LowdbSync<any>,
   routes: Record<string, string>,
-  middlewares: express.RequestHandler,
+  middlewares: express.RequestHandler[] | undefined,
   routers: RouteInfo[] | undefined,
   assetsFixUpMap: Record<string, string[]> | undefined,
+  hooks: Hooks[],
+  hooksCtx: HookContext,
   argv: Argv
 ) {
   const app = create()
+  hooksCtx.app = app
 
   const { foreignKeySuffix } = argv
 
@@ -81,6 +101,7 @@ function createApp(
     db,
     foreignKeySuffix ? { foreignKeySuffix } : undefined
   )
+  hooksCtx.router = router
 
   const defaultsOpts: MiddlewaresOptions = {
     logger: !argv.quiet,
@@ -99,24 +120,39 @@ function createApp(
     defaultsOpts.static = staticDir
   }
 
-  const defaults = _defaults(defaultsOpts)
-  app.use(defaults)
+  // HOOK: Default
+  runHook(HookNames.Default, hooks, hooksCtx, () => {
+    const defaults = _defaults(defaultsOpts)
+    app.use(defaults)
+  })
 
+  // HOOK: Route
   if (routes) {
-    const rewriter = _rewriter(routes)
-    app.use(rewriter)
+    runHook(HookNames.Route, hooks, hooksCtx, () => {
+      const rewriter = _rewriter(routes)
+      app.use(rewriter)
+    })
   }
 
+  // HOOK: Middlewares
   if (middlewares) {
-    app.use(middlewares)
+    runHook(HookNames.Middlewares, hooks, hooksCtx, () => {
+      app.use(middlewares)
+    })
   }
 
+  // HOOK: Delay
   if (argv.delay) {
-    app.use(pause(argv.delay))
+    runHook(HookNames.Delay, hooks, hooksCtx, () => {
+      app.use(pause(argv.delay!))
+    })
   }
 
+  // HOOK: Routers
   if (routers) {
-    app.use(customRouter(routers))
+    runHook(HookNames.Routers, hooks, hooksCtx, () => {
+      app.use(customRouter(routers))
+    })
   }
 
   if (assetsFixUpMap) {
@@ -130,7 +166,11 @@ function createApp(
 
   (router.db._ as unknown as Record<string, string>).id = argv.id
   shimAppDb(app).db = router.db
-  app.use(router)
+
+  // HOOK: JSONRouter
+  runHook(HookNames.JSONRouter, hooks, hooksCtx, () => {
+    app.use(router)
+  })
 
   return app
 }
@@ -186,16 +226,16 @@ export default async function (argv: Argv) {
     }
 
     // Load middlewares
-    let middlewares!: express.RequestHandler
+    let middlewares: express.RequestHandler[] | undefined = undefined
     if (argv.middlewares) {
       middlewares = argv.middlewares.map(function (m) {
         console.log(gray('  Loading', m))
         return require(resolve(m))
-      }) as unknown as express.RequestHandler
+      })
     }
 
-    let routers: RouteInfo[] | undefined = undefined
     // Load custom route handlers
+    let routers: RouteInfo[] | undefined = undefined
     if (argv.routers) {
       const files = readdirSync(argv.routers)
         .filter(JS)
@@ -216,8 +256,33 @@ export default async function (argv: Argv) {
       })
     }
 
-    let assetsFixUpMap: Record<string, string[]> | undefined = undefined
+    // Load hooks
+    let hookType: 'file' | 'dir' = 'file'
+    let hooks: Hooks[]  = []
+    let hooksCtx: HookContext = { db, routers }
+    if (argv.hooks) {
+      console.log(gray(`  Loading hooks`))
+      const fullPath = resolve(argv.hooks)
+      const stat = statSync(fullPath)
 
+      if (stat.isFile()) {
+        hookType = 'file'
+        const scriptPath = require.resolve(fullPath)
+        delete require.cache[scriptPath]
+        hooks.push(require(scriptPath))
+      } else {
+        hookType = 'dir'
+        const files = readdirSync(fullPath).filter(it => /\.js$/.test(it))
+        for (const file of files) {
+          const scriptPath = require.resolve(join(fullPath, file))
+          delete require.cache[scriptPath]
+          hooks.push(require(scriptPath))
+        }
+      }
+    }
+
+    // Load assets map
+    let assetsFixUpMap: Record<string, string[]> | undefined = undefined
     if (argv['assets-url-map']) {
       console.log(gray(`  Loading assets fixup map from ${argv['assets-url-map']}`))
       assetsFixUpMap = JSON.parse(readFileSync(argv['assets-url-map'], 'utf8'))
@@ -227,16 +292,22 @@ export default async function (argv: Argv) {
     console.log(gray('  Done'))
 
     // Create app and server
-    app = createApp(db, routes, middlewares, routers, assetsFixUpMap, argv)
-    server = app.listen(argv.port, argv.host, cb)
+    app = createApp(db, routes, middlewares, routers, assetsFixUpMap, hooks, hooksCtx, argv)
+
+    // HOOK: ServerStart
+    runHook(HookNames.ServerStart, hooks, hooksCtx, () => {
+      server = app.listen(argv.port, argv.host, cb)
+      hooksCtx.server = server
+    })
 
     // Enhance with a destroy function
-    enableDestroy(server)
+    enableDestroy(server!)
 
-    // Display server informations
+    // Display server information
     prettyPrint(argv, db.getState(), routes, routers, assetsFixUpMap)
 
-    // Catch and handle any error occurring in the server process
+    // Catch and handle any error occurring in the server process.
+    // This should only be applied at first run, so a flag is required to indicate that.
     if (!isRestart) {
       process.on('uncaughtException', (error: any) => {
         if (error.errno === 'EADDRINUSE')
@@ -393,7 +464,6 @@ export default async function (argv: Argv) {
 
           delete require.cache[require.resolve(resolve(file))]
 
-          // server && server.destroy(() => start())
           restartServer()
         })
       }
@@ -404,6 +474,8 @@ export default async function (argv: Argv) {
           console.log(
             gray(`  ${argv.routes} has changed, reloading...`)
           )
+
+          restartServer()
         })
       }
       // Watch assets fixups
@@ -412,6 +484,41 @@ export default async function (argv: Argv) {
           console.log(
             gray(`  ${argv.routes} has changed, reloading...`)
           )
+
+          restartServer()
+        })
+      }
+
+      if (argv.hooks) {
+        const fullPath = resolve(argv.hooks)
+        const stat = statSync(fullPath)
+  
+        const watchedDir = argv.hooks
+        watch(
+          resolve(argv.hooks),
+          {
+            ignoreInitial: true,
+            cwd: resolve(String(watchedDir))
+          }
+        ).on('all', (event, file) => {
+          if (stat.isDirectory()) {
+            if (!/\.js/.test(file)) return
+
+            const scriptPath = require.resolve(join(fullPath, file))
+            console.log(
+              gray(`  ${scriptPath} has changed, reloading...`)
+            )
+            delete require.cache[scriptPath]
+
+          } else {
+            const scriptPath = require.resolve(fullPath)
+            console.log(
+              gray(`  ${scriptPath} has changed, reloading...`)
+            )
+            delete require.cache[scriptPath]
+          }
+
+          restartServer()
         })
       }
     }

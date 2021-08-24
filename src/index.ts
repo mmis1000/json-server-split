@@ -1,4 +1,4 @@
-import type * as express from 'express'
+import * as express from 'express'
 import jsonServer from 'json-server';
 import { pathToRegexp } from 'path-to-regexp';
 import { fixAssetsPath } from './assets-path-fixer';
@@ -35,3 +35,5 @@ export const createRender = (pathMap: Record<string, string[]>, basePath?: strin
   }
 }
 export { fixAssetsPath } from './assets-path-fixer';
+/** A simple reexport of express */
+export { express }

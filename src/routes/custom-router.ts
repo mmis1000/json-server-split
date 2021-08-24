@@ -1,11 +1,6 @@
 import express from 'express'
 import { inspect } from 'util'
-
-export interface RouteInfo {
-  route: string
-  relativePath: string
-  handler: express.RequestHandler
-}
+import { RouteInfo } from '../interfaces'
 
 export default (routers: RouteInfo[]) => {
   const router = express.Router()

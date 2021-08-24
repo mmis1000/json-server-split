@@ -4,6 +4,6 @@
   "routes": "routes.json",
   "routers": "routers",
   "middlewares": "middlewares/server-type.js",
-  "hooks": "hooks.js",
+  "hooks": "hooks",
   "delay": 10
 }

@@ -7,6 +7,7 @@ import { resolve, relative } from 'path'
 // @ts-ignore
 import pkg = require('../../package.json')
 import { BASE_URL_HEADER } from '../constants'
+import { Argv } from '../interfaces'
 
 const pathKeys: (keyof Argv)[] = [
   'assets-url-map',
@@ -15,7 +16,8 @@ const pathKeys: (keyof Argv)[] = [
   'middlewares',
   'static',
   'routes',
-  'routers'
+  'routers',
+  'hooks'
 ]
 
 export default function () {
@@ -135,6 +137,10 @@ export default function () {
       routers: {
         type: 'string',
         description: 'Dir for custom logic for handling routes, happens before  the json and after the path rewrite',
+      },
+      hooks: {
+        type: 'string',
+        description: 'File or Dir that contains custom hook for alter the server ability',
       }
     })
     .help('help')
