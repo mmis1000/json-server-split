@@ -1,10 +1,11 @@
-
+// @ts-check
 const green = require('chalk').green;
 
 /** @type {(name: string) => import('../../src/interfaces').Hook} */
 const hook = (str) => (ctx) => {
-  console.log('-- Running ' + green(str))
+  console.log('-- Hook: ' + green(str))
   console.log('   available props ' + Object.keys(ctx).join(', '))
+  console.log()
 }
 
 /** @type {import('../../src/interfaces').Hooks} */
