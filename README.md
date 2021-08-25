@@ -10,18 +10,19 @@ The extensions aim to allow users mock most of back-end patterns from command li
 ## Table of contents
 
 - [Usages](#usage)
-- [Extensions](#extensions)
+- [Changes](#changes)
   - [The db file structure](#the-db-file-structure)
+  - [Middleware can be pointed to a directory](#middleware-can-be-pointed-to-a-directory)
+  - [Path in `--config` option now relatives to config file](#path-in---config-option-now-relatives-to-config-file)
+  - [Watch works with middleware and anything need to be watched](#watch-works-with-middleware-and-anything-need-to-be-watched)
+- [Extensions](#extensions)
   - [Programmed generation of certain db fields](#programmed-generation-of-certain-db-fields)
   - [Saved snapshot of generated data](#saved-snapshot-of-generated-data)
   - [Immutable record](#immutable-record)
   - [Volatile record](#volatile-record)
-  - [Middleware pointed to directory](#middleware-pointed-to-directory)
   - [Custom routes](#custom-routes)
   - [Rewrite response to make url work](#rewrite-response-to-make-url-work)
   - [Hooks](#hooks)
-  - [Path in `--config` option now relatives to config file](#path-in---config-option-now-relatives-to-config-file)
-  - [Watch works with middleware and anything need to be watched](#watch-works-with-middleware-and-anything-need-to-be-watched)
 - [Programmed usage](#programmed-usage)
   - [As a `JSON Server` `render` function](#as-a-json-server-render-function)
   - [As a util function](#as-a-util-function)
@@ -44,7 +45,7 @@ Options:
   -H, --host                     Set host        [string] [default: "localhost"]
   -w, --watch                    Watch file(s)                         [boolean]
   -r, --routes                   Path to routes file                    [string]
-  -m, --middlewares              Paths to middleware files               [array]
+  -m, --middlewares              Paths to middleware files/dirs          [array]
   -s, --static                   Set static files directory             [string]
       --read-only, --ro          Allow only GET requests               [boolean]
       --no-cors, --nc            Disable Cross-Origin Resource Sharing [boolean]
@@ -69,11 +70,13 @@ Options:
       --routers                  Dir for custom logic for handling routes,
                                  happens before  the json and after the path
                                  rewrite                                [string]
+      --hooks                    File or Dir that contains custom hook for alter
+                                 the server ability                      [array]
   -h, --help                     Show help                             [boolean]
   -v, --version                  Show version number                   [boolean]
 
 Examples:
-  json-server-split db/
+  bin.js db/
 
 About The `--routers`
 
@@ -97,7 +100,7 @@ Caveats
 https://github.com/mmis1000/json-server-split
 ```
 
-## Extensions
+## Changes
 
 ### The db file structure
 
@@ -130,6 +133,51 @@ db/b.json
 ```json
 [4, 5, 6]
 ```
+
+### Middleware can be pointed to a directory
+
+`middlewares` option can now be pointed to a directory instead of a file.
+
+Only the top level files in that directory will be loaded as middlewares.
+But any changed file in that will triggers a reload when `--watch` option is used
+
+### Path in `--config` option now relatives to config file
+
+This no longer results in file not found
+
+files
+
+```txt
+/nest
+  /db/
+  /config.json
+  /routes.json
+```
+
+config.json
+
+```json
+{
+  "routes": "routes.json"
+}
+```
+
+```txt
+/ $ npx @mmis1000/json-server-split --config nest/config.json nest/db
+```
+
+### Watch works with middleware and anything need to be watched
+
+**(See also [caveats](#watch-on-js-works-partially), reload js file still has some limitation)**
+
+All files are watched now.
+If the pointed path is a directory, then all file in the directory are watched.
+
+Includes newly added `--routers` , `--assets-url-map`, `hooks`
+
+You can just enable watch, edit them and the server will take care of the rest.
+
+## Extensions
 
 ### Programmed generation of certain db fields
 
@@ -192,13 +240,6 @@ db/a.snapshot.json // new!
 Same as above `Programmed generation of certain db fields` but end with `.js` instead of `.template.js`
 
 The data never writes back to disk and gone after the reload.
-
-### Middleware pointed to directory
-
-`middlewares` option can now be pointed to a directory instead of a file.
-
-Only the top level files in that directory will be loaded as middlewares.
-But any changed file in that will triggers a reload when `--watch` option is used
 
 ### Custom routes
 
@@ -328,6 +369,52 @@ Inject points for you to alter the server, db, express app or json router instan
 
 Useful things like attach the ws module to the server for web socket related function.
 
+#### Available types
+
+```txt
+-- Hook: pre_Default
+   available props db, routers, app, router
+
+-- Hook: post_Default
+   available props db, routers, app, router
+
+-- Hook: pre_Route
+   available props db, routers, app, router
+
+-- Hook: post_Route
+   available props db, routers, app, router
+
+-- Hook: pre_Middlewares
+   available props db, routers, app, router
+
+-- Hook: post_Middlewares
+   available props db, routers, app, router
+
+-- Hook: pre_Delay
+   available props db, routers, app, router
+
+-- Hook: post_Delay
+   available props db, routers, app, router
+
+-- Hook: pre_Routers
+   available props db, routers, app, router
+
+-- Hook: post_Routers
+   available props db, routers, app, router
+
+-- Hook: pre_JSONRouter
+   available props db, routers, app, router
+
+-- Hook: post_JSONRouter
+   available props db, routers, app, router
+
+-- Hook: pre_ServerStart
+   available props db, routers, app, router
+
+-- Hook: post_ServerStart
+   available props db, routers, app, router, server
+```
+
 #### Example
 
 ```js
@@ -350,40 +437,6 @@ hooks.post_ServerStart = ({ server }) => {
   })
 }
 ```
-
-### Path in `--config` option now relatives to config file
-
-This no longer results in file not found
-
-files
-
-```txt
-/nest
-  /db/
-  /config.json
-  /routes.json
-```
-
-config.json
-
-```json
-{
-  "routes": "routes.json"
-}
-```
-
-```txt
-/ $ npx @mmis1000/json-server-split --config nest/config.json nest/db
-```
-
-### Watch works with middleware and anything need to be watched
-
-**(See also [caveats](#watch-on-js-works-partially), reload js file still has some limitation)**
-
-All files are watched now.
-Include newly added `--routers` , `--assets-url-map`.
-
-You can just enable watch, edit them and they will take care of the rest.
 
 ## Programmed usage
 
@@ -439,4 +492,4 @@ const new = fixAssetsPath(
 ### Watch on js works partially
 
 Watch against javascript files only works properly when the file itself changed because there is no way to know what file the module tries to require.  
-Change in file included indirectly still need a full restart to take effect.
+Change in file outside of the directory and included indirectly by watched file still need a full restart to take effect.
