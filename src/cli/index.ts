@@ -32,7 +32,11 @@ export default function () {
 
       for (const key of pathKeys) {
         if (Object.prototype.hasOwnProperty.call(parsed, key)) {
-          parsed[key] = relative(process.cwd(), resolve(base, parsed[key]))
+          if (Array.isArray(parsed[key])) {
+            parsed[key] = parsed[key].map((p: string) => relative(process.cwd(), resolve(base, p)))
+          } else {
+            parsed[key] = relative(process.cwd(), resolve(base, parsed[key]))
+          }
         }
       }
 
@@ -66,7 +70,7 @@ export default function () {
         type: 'string',
         alias: 'm',
         array: true,
-        description: 'Paths to middleware files',
+        description: 'Paths to middleware files/dirs',
       },
       static: {
         type: 'string',
@@ -140,6 +144,7 @@ export default function () {
       },
       hooks: {
         type: 'string',
+        array: true,
         description: 'File or Dir that contains custom hook for alter the server ability',
       }
     })

@@ -193,21 +193,37 @@ export default async function (argv: Argv) {
   console.log()
   console.log(cyan('  \\{^_^}/ hi!'))
 
+  let pendingRestart = 0
   let serverRestartQueue = Promise.resolve()
 
-  const restartServer = () => {
-    serverRestartQueue = serverRestartQueue.then(() => new Promise<void>(resolve => {
+  const restartServer = async () => {
+    if (pendingRestart > 0) {
+      // There is already a restart scheduled
+      return
+    }
+
+    pendingRestart++
+    serverRestartQueue = serverRestartQueue
+    .then(() => new Promise<void>((resolve, reject) => {
+      pendingRestart--
       if (server) {
         server && server.destroy(() => {
-          start(() => resolve(), true)
+          server = undefined
+          start(true).then(() => resolve()).catch(reject)
         })
       } else {
-        resolve()
+        // looks like we didn't start the server successfully last time
+        start(true).then(() => resolve()).catch(reject)
       }
     }))
+    .catch((e) => {
+      server = undefined
+      console.error(red('Failed to start server'))
+      console.error(e.stack)
+    })
   }
 
-  async function start(cb?: () => void, isRestart?: boolean) {
+  async function start(isRestart?: boolean) {
     console.log()
 
     console.log(gray('  Loading', source))
@@ -230,10 +246,24 @@ export default async function (argv: Argv) {
     if (argv.middlewares) {
       console.log(gray('  Loading middlewares'))
       middlewares = argv.middlewares.map(function (middleware) {
-        console.log(gray('    Adding ', middleware))
         const resolved = resolve(middleware)
-        delete require.cache[resolved]
-        return require(resolved)
+        const stat = statSync(resolved)
+
+        if (stat.isFile()) {
+          console.log(gray('    Adding ', resolved))
+          const scriptPath = require.resolve(resolved)
+          delete require.cache[scriptPath]
+          return require(scriptPath)
+        } else {
+          const files = readdirSync(resolved).filter(it => /\.js$/.test(it))
+          for (let file of files) {
+            const fullPath = resolve(resolved, file)
+            console.log(gray('    Adding ', fullPath))
+            const scriptPath = require.resolve(fullPath)
+            delete require.cache[scriptPath]
+            return require(scriptPath)
+          }
+        }
       })
     }
 
@@ -264,21 +294,23 @@ export default async function (argv: Argv) {
     let hooksCtx: HookContext = { db, routers }
     if (argv.hooks) {
       console.log(gray(`  Loading hooks`))
-      const fullPath = resolve(argv.hooks)
-      const stat = statSync(fullPath)
+      for (const hookDirOrFile of argv.hooks) {
+        const fullPath = resolve(hookDirOrFile)
+        const stat = statSync(fullPath)
 
-      if (stat.isFile()) {
-        console.log(gray(`    Adding hook ${fullPath}`))
-        const scriptPath = require.resolve(fullPath)
-        delete require.cache[scriptPath]
-        hooks.push(require(scriptPath))
-      } else {
-        const files = readdirSync(fullPath).filter(it => /\.js$/.test(it))
-        for (const file of files) {
-          console.log(gray(`    Adding hook ${join(fullPath, file)}`))
-          const scriptPath = require.resolve(join(fullPath, file))
+        if (stat.isFile()) {
+          console.log(gray(`    Adding hook ${fullPath}`))
+          const scriptPath = require.resolve(fullPath)
           delete require.cache[scriptPath]
           hooks.push(require(scriptPath))
+        } else {
+          const files = readdirSync(fullPath).filter(it => /\.js$/.test(it))
+          for (const file of files) {
+            console.log(gray(`    Adding hook ${join(fullPath, file)}`))
+            const scriptPath = require.resolve(join(fullPath, file))
+            delete require.cache[scriptPath]
+            hooks.push(require(scriptPath))
+          }
         }
       }
     }
@@ -296,10 +328,12 @@ export default async function (argv: Argv) {
     // Create app and server
     app = createApp(db, routes, middlewares, routers, assetsFixUpMap, hooks, hooksCtx, argv)
 
-    // HOOK: ServerStart
-    runHook(HookNames.ServerStart, hooks, hooksCtx, () => {
-      server = app.listen(argv.port, argv.host, cb)
-      hooksCtx.server = server
+    await new Promise<void>(resolve => {
+      // HOOK: ServerStart
+      runHook(HookNames.ServerStart, hooks, hooksCtx, () => {
+        server = app.listen(argv.port, argv.host, resolve)
+        hooksCtx.server = server
+      })
     })
 
     // Enhance with a destroy function
@@ -451,23 +485,54 @@ export default async function (argv: Argv) {
       }
 
 
-      // Watch routers
+      // Watch middlewares
       if (argv.middlewares) {
         const middlewares = argv.middlewares
-        watch(
-          middlewares.map(it => resolve(it)),
-          {
-            ignoreInitial: true
-          }
-        ).on('all', (event, file) => {
-          console.log(
-            gray(`  ${file} has changed, reloading...`)
-          )
+        for (const middleware of argv.middlewares) {
+          const fullPath = resolve(middleware)
+          watch(
+            fullPath,
+            {
+              ignoreInitial: true,
+              cwd: fullPath
+            }
+          ).on('all', (event, file) => {
+            const filePath = join(fullPath, file)
+            console.log(
+              gray(`  ${filePath} has changed, reloading...`)
+            )
+            try {
+              const scriptPath = require.resolve(join(fullPath, file))
+              delete require.cache[scriptPath]
+            } catch (err) { /* ignores intentionally, because it can be removed or actually a dir */ }
+            restartServer()
+          })
+        }
+      }
 
-          delete require.cache[require.resolve(resolve(file))]
+      // Watch hooks
+      if (argv.hooks) {
+        for (const hookDirOrFile of argv.hooks) {
+          const fullPath = resolve(hookDirOrFile)
 
-          restartServer()
-        })
+          watch(
+            fullPath,
+            {
+              ignoreInitial: true,
+              cwd: fullPath
+            }
+          ).on('all', (event, file) => {
+            const filePath = join(fullPath, file)
+            console.log(
+              gray(`  ${filePath} has changed, reloading...`)
+            )
+            try {
+              const scriptPath = require.resolve(join(fullPath, file))
+              delete require.cache[scriptPath]
+            } catch (err) { /* ignores intentionally, because it can be removed or actually a dir */ }
+            restartServer()
+          })
+        }
       }
 
       // Watch routes
@@ -480,6 +545,7 @@ export default async function (argv: Argv) {
           restartServer()
         })
       }
+
       // Watch assets fixups
       if (argv['assets-url-map']) {
         watch(resolve(argv['assets-url-map']), { ignoreInitial: true }).on('all', () => {
@@ -487,26 +553,6 @@ export default async function (argv: Argv) {
             gray(`  ${argv.routes} has changed, reloading...`)
           )
 
-          restartServer()
-        })
-      }
-
-      if (argv.hooks) {
-        const fullPath = resolve(argv.hooks)
-        const watchedDir = argv.hooks
-
-        watch(
-          resolve(argv.hooks),
-          {
-            ignoreInitial: true,
-            cwd: resolve(String(watchedDir))
-          }
-        ).on('all', (event, file) => {
-          const scriptPath = require.resolve(join(fullPath, file))
-          console.log(
-            gray(`  ${scriptPath} has changed, reloading...`)
-          )
-          delete require.cache[scriptPath]
           restartServer()
         })
       }

@@ -36,7 +36,7 @@ export interface Argv {
   foreignKeySuffix?: string
   routes?: string
   middlewares?: string[]
-  hooks?: string
+  hooks?: string[]
 }
 
 type HookMapper<Types extends string> = `pre_${Types}` |  `post_${Types}`

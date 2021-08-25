@@ -3,7 +3,7 @@ const green = require('chalk').green;
 
 /** @type {(name: string) => import('../../../src/interfaces').Hook} */
 const hook = (str) => (ctx) => {
-  console.log('-- 1: Running ' + green(str))
+  console.log('-- 2: Running ' + green(str))
   console.log('   available props ' + Object.keys(ctx).join(', '))
   console.log()
 }

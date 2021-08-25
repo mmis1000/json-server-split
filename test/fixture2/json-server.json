@@ -3,7 +3,7 @@
   "assets-url-map": "assetsPaths.json",
   "routes": "routes.json",
   "routers": "routers",
-  "middlewares": "middlewares/server-type.js",
-  "hooks": "hooks",
+  "middlewares": ["middlewares/server-type.js", "middlewares1"],
+  "hooks": ["hooks", "hooks2"],
   "delay": 10
 }
