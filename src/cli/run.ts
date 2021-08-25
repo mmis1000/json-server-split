@@ -255,7 +255,7 @@ export default async function (argv: Argv) {
           delete require.cache[scriptPath]
           return require(scriptPath)
         } else {
-          const files = readdirSync(resolved).filter(it => /\.js$/.test(it))
+          const files = readdirSync(resolved).filter(it => /\.[jt]s$/.test(it))
           for (let file of files) {
             const fullPath = resolve(resolved, file)
             console.log(gray('    Adding ', fullPath))
@@ -275,7 +275,7 @@ export default async function (argv: Argv) {
 
       console.log(gray(`  Loading custom routes`))
       routers = files.map(s => {
-        const route = '/' + s.replace(/\.js$/, '').split(/--/g).map(s => s.replace(/^_/, ':')).join('/')
+        const route = '/' + s.replace(/\.[jt]s$/, '').split(/--/g).map(s => s.replace(/^_/, ':')).join('/')
         const relativePath = join(argv.routers!, s)
         const scriptPath = require.resolve(resolve(relativePath))
         delete require.cache[scriptPath]
@@ -304,7 +304,7 @@ export default async function (argv: Argv) {
           delete require.cache[scriptPath]
           hooks.push(require(scriptPath))
         } else {
-          const files = readdirSync(fullPath).filter(it => /\.js$/.test(it))
+          const files = readdirSync(fullPath).filter(it => /\.[jt]s$/.test(it))
           for (const file of files) {
             console.log(gray(`    Adding hook ${join(fullPath, file)}`))
             const scriptPath = require.resolve(join(fullPath, file))

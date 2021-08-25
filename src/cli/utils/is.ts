@@ -8,7 +8,7 @@ function FILE(s: string) {
 }
 
 function JS(s: string) {
-  return !URL(s) && /\.js$/.test(s)
+  return !URL(s) && /\.[jt]s$/.test(s) && !/\.d\.ts$/.test(s)
 }
 
 function URL(s: string) {

@@ -4,8 +4,8 @@ import run from './run'
 import fs from 'fs'
 import { resolve, relative } from 'path'
 
-// @ts-ignore
-import pkg = require('../../package.json')
+// don't import, just require. Typescript is dumb about file not in rootDir
+const pkg = require('../../package.json')
 import { BASE_URL_HEADER } from '../constants'
 import { Argv } from '../interfaces'
 
