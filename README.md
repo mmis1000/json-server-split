@@ -16,8 +16,10 @@ The extensions aim to allow users mock most of back-end patterns from command li
   - [Saved snapshot of generated data](#saved-snapshot-of-generated-data)
   - [Immutable record](#immutable-record)
   - [Volatile record](#volatile-record)
+  - [Middleware pointed to directory](#middleware-pointed-to-directory)
   - [Custom routes](#custom-routes)
   - [Rewrite response to make url work](#rewrite-response-to-make-url-work)
+  - [Hooks](#hooks)
   - [Path in `--config` option now relatives to config file](#path-in---config-option-now-relatives-to-config-file)
   - [Watch works with middleware and anything need to be watched](#watch-works-with-middleware-and-anything-need-to-be-watched)
 - [Programmed usage](#programmed-usage)
@@ -191,6 +193,13 @@ Same as above `Programmed generation of certain db fields` but end with `.js` in
 
 The data never writes back to disk and gone after the reload.
 
+### Middleware pointed to directory
+
+`middlewares` option can now be pointed to a directory instead of a file.
+
+Only the top level files in that directory will be loaded as middlewares.
+But any changed file in that will triggers a reload when `--watch` option is used
+
 ### Custom routes
 
 Instead of use the json server as library and hook yourself.
@@ -312,6 +321,35 @@ curl -H "ASSETS-PREFIX=http%3A%2F%2Fexample.com%2F" http://localhost:3000/assets
 ```
 
 And you got same output as previous one.
+
+### Hooks
+
+Inject points for you to alter the server, db, express app or json router instance.
+
+Useful things like attach the ws module to the server for web socket related function.
+
+#### Example
+
+```js
+// @ts-check
+const WebSocket = require('ws')
+
+/** @type {import('@mmis1000/json-server-split').Hooks} */
+const hooks = {}
+
+hooks.post_ServerStart = ({ server }) => {
+  const wss = new WebSocket.Server({ noServer: true })
+
+  wss.on('connection', function connection(ws, req) {
+  })
+
+  server.on('upgrade', function upgrade(request, socket, head) {
+    wss.handleUpgrade(request, socket, head, function done(ws) {
+      wss.emit('connection', ws, request)
+    })
+  })
+}
+```
 
 ### Path in `--config` option now relatives to config file
 

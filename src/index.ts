@@ -37,3 +37,5 @@ export const createRender = (pathMap: Record<string, string[]>, basePath?: strin
 export { fixAssetsPath } from './assets-path-fixer';
 /** A simple reexport of express */
 export { express }
+
+export { Hooks } from './interfaces'
