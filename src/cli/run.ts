@@ -127,33 +127,33 @@ function createApp(
   })
 
   // HOOK: Route
-  if (routes) {
-    runHook(HookNames.Route, hooks, hooksCtx, () => {
+  runHook(HookNames.Route, hooks, hooksCtx, () => {
+    if (routes) {
       const rewriter = _rewriter(routes)
       app.use(rewriter)
-    })
-  }
+    }
+  })
 
   // HOOK: Middlewares
-  if (middlewares) {
-    runHook(HookNames.Middlewares, hooks, hooksCtx, () => {
+  runHook(HookNames.Middlewares, hooks, hooksCtx, () => {
+    if (middlewares) {
       app.use(middlewares)
-    })
-  }
+    }
+  })
 
   // HOOK: Delay
-  if (argv.delay) {
-    runHook(HookNames.Delay, hooks, hooksCtx, () => {
+  runHook(HookNames.Delay, hooks, hooksCtx, () => {
+    if (argv.delay) {
       app.use(pause(argv.delay!))
-    })
-  }
+    }
+  })
 
   // HOOK: Routers
-  if (routers) {
-    runHook(HookNames.Routers, hooks, hooksCtx, () => {
+  runHook(HookNames.Routers, hooks, hooksCtx, () => {
+    if (routers) {
       app.use(customRouter(routers))
-    })
-  }
+    }
+  })
 
   if (assetsFixUpMap) {
     app.use(assetsFixerInfo(assetsFixUpMap));
@@ -221,16 +221,19 @@ export default async function (argv: Argv) {
     // Load additional routes
     let routes
     if (argv.routes) {
-      console.log(gray('  Loading', argv.routes))
+      console.log(gray(`  Loading routes ${argv.routes}`))
       routes = JSON.parse(readFileSync(argv.routes, 'utf-8'))
     }
 
     // Load middlewares
     let middlewares: express.RequestHandler[] | undefined = undefined
     if (argv.middlewares) {
-      middlewares = argv.middlewares.map(function (m) {
-        console.log(gray('  Loading', m))
-        return require(resolve(m))
+      console.log(gray('  Loading middlewares'))
+      middlewares = argv.middlewares.map(function (middleware) {
+        console.log(gray('    Adding ', middleware))
+        const resolved = resolve(middleware)
+        delete require.cache[resolved]
+        return require(resolved)
       })
     }
 
@@ -257,8 +260,7 @@ export default async function (argv: Argv) {
     }
 
     // Load hooks
-    let hookType: 'file' | 'dir' = 'file'
-    let hooks: Hooks[]  = []
+    let hooks: Hooks[] = []
     let hooksCtx: HookContext = { db, routers }
     if (argv.hooks) {
       console.log(gray(`  Loading hooks`))
@@ -266,14 +268,14 @@ export default async function (argv: Argv) {
       const stat = statSync(fullPath)
 
       if (stat.isFile()) {
-        hookType = 'file'
+        console.log(gray(`    Adding hook ${fullPath}`))
         const scriptPath = require.resolve(fullPath)
         delete require.cache[scriptPath]
         hooks.push(require(scriptPath))
       } else {
-        hookType = 'dir'
         const files = readdirSync(fullPath).filter(it => /\.js$/.test(it))
         for (const file of files) {
+          console.log(gray(`    Adding hook ${join(fullPath, file)}`))
           const scriptPath = require.resolve(join(fullPath, file))
           delete require.cache[scriptPath]
           hooks.push(require(scriptPath))
@@ -491,9 +493,8 @@ export default async function (argv: Argv) {
 
       if (argv.hooks) {
         const fullPath = resolve(argv.hooks)
-        const stat = statSync(fullPath)
-  
         const watchedDir = argv.hooks
+
         watch(
           resolve(argv.hooks),
           {
@@ -501,23 +502,11 @@ export default async function (argv: Argv) {
             cwd: resolve(String(watchedDir))
           }
         ).on('all', (event, file) => {
-          if (stat.isDirectory()) {
-            if (!/\.js/.test(file)) return
-
-            const scriptPath = require.resolve(join(fullPath, file))
-            console.log(
-              gray(`  ${scriptPath} has changed, reloading...`)
-            )
-            delete require.cache[scriptPath]
-
-          } else {
-            const scriptPath = require.resolve(fullPath)
-            console.log(
-              gray(`  ${scriptPath} has changed, reloading...`)
-            )
-            delete require.cache[scriptPath]
-          }
-
+          const scriptPath = require.resolve(join(fullPath, file))
+          console.log(
+            gray(`  ${scriptPath} has changed, reloading...`)
+          )
+          delete require.cache[scriptPath]
           restartServer()
         })
       }
