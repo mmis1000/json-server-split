@@ -308,7 +308,7 @@ describe('test reload', () => {
   it ('should add new db resource on the fly', async () => {
     const payload = Math.random()
 
-    await new Promise(r => setTimeout(r, 1000))
+    await new Promise(r => setTimeout(r, 500))
 
     fs.writeFileSync(
       path.resolve(__dirname, './tmp/db/new.json'),

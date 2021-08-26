@@ -19,8 +19,8 @@ import customRouter from '../routes/custom-router'
 import { FILE, JS } from './utils/is'
 import load from './utils/load'
 
-const shimAppDb = (e: express.Application) => 
-  e as express.Application & { db: low.LowdbSync<any>, currentRouter: express.RequestHandler }
+const shimApp = (e: express.Application) => 
+  e as express.Application & { db: low.LowdbSync<any>, currentJSONRouter: express.RequestHandler }
 
 function runHook(
   name: HookNames,
@@ -101,7 +101,9 @@ function createApp(
   const router = _router(
     db,
     foreignKeySuffix ? { foreignKeySuffix } : undefined
-  )
+  );
+  (router.db._ as unknown as Record<string, string>).id = argv.id
+  shimApp(app).db = router.db
   hooksCtx.router = router
 
   const defaultsOpts: MiddlewaresOptions = {
@@ -165,14 +167,12 @@ function createApp(
     )
   }
 
-  (router.db._ as unknown as Record<string, string>).id = argv.id
-  shimAppDb(app).db = router.db
 
   // HOOK: JSONRouter
   runHook(HookNames.JSONRouter, hooks, hooksCtx, () => {
-    shimAppDb(app).currentRouter = router
+    shimApp(app).currentJSONRouter = router
     app.use((req, res, next) => {
-      shimAppDb(app).currentRouter(req, res, next)
+      shimApp(app).currentJSONRouter(req, res, next)
     })
     // app.use(router)
   })
@@ -387,7 +387,7 @@ export default async function (argv: Argv) {
       if (chunk.trim().toLowerCase() === 's') {
         const filename = `db-${Date.now()}.json`
         const file = join(argv.snapshots, filename)
-        const state = shimAppDb(app).db.getState()
+        const state = shimApp(app).db.getState()
         writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8')
         console.log(
           `  Saved snapshot to ${relative(process.cwd(), file)}\n`
@@ -457,8 +457,8 @@ export default async function (argv: Argv) {
 
           // Compare old dir content with in memory database
           const latestSource = sourceAdapter.read()
-          const isDatabaseDifferent = !isEqual(latestSource, shimAppDb(app).db.getState())
-          const isKeyDifferent = !isEqual(Object.keys(latestSource), Object.keys(shimAppDb(app).db.getState()))
+          const isDatabaseDifferent = !isEqual(latestSource, shimApp(app).db.getState())
+          const isKeyDifferent = !isEqual(Object.keys(latestSource), Object.keys(shimApp(app).db.getState()))
 
           if (isDatabaseDifferent) {
             console.log(
@@ -467,17 +467,19 @@ export default async function (argv: Argv) {
 
             // server && server.destroy(() => start())
             // restartServer()
-            shimAppDb(app).db.setState(latestSource)
+            shimApp(app).db.setState(latestSource)
 
             // also reload the json router on key change
             if (isKeyDifferent) {
               const newRouter = _router(
                 db,
                 argv.foreignKeySuffix ? { foreignKeySuffix: argv.foreignKeySuffix } : undefined
-              )
+              );
+              (newRouter.db._ as unknown as Record<string, string>).id = argv.id
+              shimApp(app).db = newRouter.db
 
               runHook(HookNames.JSONRouterReload, hooks, hooksCtx, () => {
-                shimAppDb(app).currentRouter = newRouter
+                shimApp(app).currentJSONRouter = newRouter
                 hooksCtx.router = newRouter
               })
             }
