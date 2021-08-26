@@ -9,8 +9,9 @@
     "watch": "tsc --watch",
     "prepublishOnly": "npm build ."
   },
-  "author": "",
-  "license": "ISC",
+  "author": "mmis1000 <mmis10002@gmail.com> (http://mmis1000.me/)",
+  "license": "MIT",
+  "repository": "https://github.com/mmis1000/json-server-split",
   "bin": "./lib/cli/bin.js",
   "dependencies": {
     "@mmis1000/lowdb-split-json-adapter": "^0.1.4",
