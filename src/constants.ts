@@ -7,5 +7,7 @@ export enum  HookNames {
   Delay = 'Delay',
   Routers = 'Routers',
   JSONRouter = 'JSONRouter',
-  ServerStart = 'ServerStart'
+  ServerStart = 'ServerStart',
+
+  JSONRouterReload = 'JSONRouterReload'
 }

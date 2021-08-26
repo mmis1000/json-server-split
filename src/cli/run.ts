@@ -19,7 +19,8 @@ import customRouter from '../routes/custom-router'
 import { FILE, JS } from './utils/is'
 import load from './utils/load'
 
-const shimAppDb = (e: express.Application) => e as express.Application & { db: low.LowdbSync<any> }
+const shimAppDb = (e: express.Application) => 
+  e as express.Application & { db: low.LowdbSync<any>, currentRouter: express.RequestHandler }
 
 function runHook(
   name: HookNames,
@@ -169,7 +170,11 @@ function createApp(
 
   // HOOK: JSONRouter
   runHook(HookNames.JSONRouter, hooks, hooksCtx, () => {
-    app.use(router)
+    shimAppDb(app).currentRouter = router
+    app.use((req, res, next) => {
+      shimAppDb(app).currentRouter(req, res, next)
+    })
+    // app.use(router)
   })
 
   return app
@@ -358,11 +363,11 @@ export default async function (argv: Argv) {
       })
     }
 
-    return [sourceAdapter, db]
+    return [sourceAdapter, db, hooks, hooksCtx] as const
   }
 
   try {
-    const [sourceAdapter, db] = await start()
+    const [sourceAdapter, db, hooks, hooksCtx] = await start()
 
     // Snapshot
     console.log(
@@ -408,6 +413,9 @@ export default async function (argv: Argv) {
           cwd: resolve(watchedDir)
         }
       ).on('all', (event, file) => {
+        console.log(
+          gray(`  ${file} changed`)
+        )
         const watchedFile = resolve(watchedDir, file)
 
         if (FILE(watchedFile) || JS(watchedFile)) {
@@ -450,6 +458,7 @@ export default async function (argv: Argv) {
           // Compare old dir content with in memory database
           const latestSource = sourceAdapter.read()
           const isDatabaseDifferent = !isEqual(latestSource, shimAppDb(app).db.getState())
+          const isKeyDifferent = !isEqual(Object.keys(latestSource), Object.keys(shimAppDb(app).db.getState()))
 
           if (isDatabaseDifferent) {
             console.log(
@@ -459,6 +468,19 @@ export default async function (argv: Argv) {
             // server && server.destroy(() => start())
             // restartServer()
             shimAppDb(app).db.setState(latestSource)
+
+            // also reload the json router on key change
+            if (isKeyDifferent) {
+              const newRouter = _router(
+                db,
+                argv.foreignKeySuffix ? { foreignKeySuffix: argv.foreignKeySuffix } : undefined
+              )
+
+              runHook(HookNames.JSONRouterReload, hooks, hooksCtx, () => {
+                shimAppDb(app).currentRouter = newRouter
+                hooksCtx.router = newRouter
+              })
+            }
           }
         }
       })
@@ -556,6 +578,11 @@ export default async function (argv: Argv) {
           restartServer()
         })
       }
+    }
+
+    // for test
+    if (process.send) {
+      process.send({ type: 'ready' })
     }
   } catch (err) {
     console.log(err)

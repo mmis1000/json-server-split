@@ -413,6 +413,12 @@ Useful things like attach the ws module to the server for web socket related fun
 
 -- Hook: post_ServerStart
    available props db, routers, app, router, server
+
+-- Hook: pre_JSONRouterReload
+   available props db, routers, app, router, server
+
+-- Hook: post_JSONRouterReload
+   available props db, routers, app, router, server
 ```
 
 #### Example
