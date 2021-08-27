@@ -8,6 +8,7 @@ import { resolve, relative } from 'path'
 const pkg = require('../../package.json')
 import { BASE_URL_HEADER } from '../constants'
 import { Argv } from '../interfaces'
+import migrate from './migrate'
 
 const pathKeys: (keyof Argv)[] = [
   'assets-url-map',
@@ -146,6 +147,11 @@ export default function () {
         type: 'string',
         array: true,
         description: 'File or Dir that contains custom hook for alter the server ability',
+      },
+      migrate: {
+        type: 'boolean',
+        default: false,
+        description: 'this option is used to convent the existing db.json file into new structure and exits immediately'
       }
     })
     .help('help')
@@ -177,5 +183,9 @@ https://github.com/mmis1000/json-server-split`)
     .require(1, 'Missing <source> argument')
     .parseSync()
 
-  run(argv)
+  if (argv.migrate) {
+    migrate(argv._[0] as string)
+  } else {
+    run(argv)
+  }
 }
