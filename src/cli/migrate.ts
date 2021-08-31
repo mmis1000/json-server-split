@@ -39,4 +39,21 @@ export default (filePath: string) => {
   }
 
   console.log(`Converted db outputted at ${outputTarget}`)
+
+  let typedef = `interface Db {
+`
+
+  for (let key of Object.keys(data)) {
+    if (!/^[a-zA-Z0-9_]$/.test(key)) {
+      typedef += `  ${JSON.stringify(key)}: typeof import(${JSON.stringify( `./${bareName}/${key}.json`)})\n`
+    } else {
+      typedef += `  ${key}: typeof import(${JSON.stringify( `./${bareName}/${key}.json`)})\n`
+    }
+  }
+
+  typedef += `}
+
+export default Db
+`
+  writeFileSync(join(dirname, bareName + '.d.ts'), typedef)
 }
