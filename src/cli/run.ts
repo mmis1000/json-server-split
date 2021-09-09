@@ -262,7 +262,7 @@ export default async function (argv: Argv) {
         } else {
           const routes: express.RequestHandler[] = []
           const files = readdirSync(resolved).filter(it => /\.[jt]s$/.test(it))
-          files.sort((a, b) => a > b ? 1 : -1)
+          files.sort((a, b) => a.replace(/\.[jt]s$/, '') > b.replace(/\.[jt]s$/, '')  ? 1 : -1)
           for (let file of files) {
             const fullPath = resolve(resolved, file)
             console.log(gray('    Adding ', fullPath))
