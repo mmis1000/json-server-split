@@ -258,18 +258,21 @@ export default async function (argv: Argv) {
           console.log(gray('    Adding ', resolved))
           const scriptPath = require.resolve(resolved)
           delete require.cache[scriptPath]
-          return require(scriptPath)
+          return [require(scriptPath)]
         } else {
+          const routes: express.RequestHandler[] = []
           const files = readdirSync(resolved).filter(it => /\.[jt]s$/.test(it))
+          files.sort((a, b) => a > b ? 1 : -1)
           for (let file of files) {
             const fullPath = resolve(resolved, file)
             console.log(gray('    Adding ', fullPath))
             const scriptPath = require.resolve(fullPath)
             delete require.cache[scriptPath]
-            return require(scriptPath)
+            routes.push(require(scriptPath))
           }
+          return routes
         }
-      })
+      }).flat()
     }
 
     // Load custom route handlers

@@ -178,6 +178,7 @@ describe('test server 2', () => {
   it ('should have middleware in dir applied properly', async () => {
     const headers = (await fetch(`http://localhost:${port}/now`)).headers
     expect(headers.get('X-Potato-Baked-By')).toEqual('Intel')
+    expect(headers.get('X-Cookie-Baked-By')).toEqual('Grandma')
   })
 })
 
