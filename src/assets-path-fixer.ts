@@ -22,13 +22,24 @@ export const fixAssetsPath = (data: JSON, base: string, paths: string[]) => {
         return data
       case "string":
         if (paths.find(it => it.length === 0)) {
-          // actual rewrite
-          return new URL(
-            // remove leading /
-            data.replace(/^\/+/, ''),
-            // append trailing /
-            base.replace(/\/*$/, '/')
-          ).toString()
+          if (base.indexOf(':') < 0) {
+            const prepend = 'http://empty.host/'
+            // actual rewrite
+            return new URL(
+              // remove leading /
+              data.replace(/^\/+/, ''),
+              // remove leading and append trailing /
+              prepend + base.replace(/^\/+/, '').replace(/\/*$/, '/')
+            ).toString().replace('http://empty.host', '')
+          } else {
+            // actual rewrite
+            return new URL(
+              // remove leading /
+              data.replace(/^\/+/, ''),
+              // append trailing /
+              base.replace(/\/*$/, '/')
+            ).toString()
+          }
         } else {
           return data
         }

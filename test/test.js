@@ -38,6 +38,25 @@ describe('test remap', () => {
       "a": "b.png"
     })
   })
+  it ('should remap paths to absolute path', () => {
+    const original = {
+      "url": "a.png",
+      "a": "b.png"
+    }
+
+    const newRes = fixAssetsPath(
+      original,
+      // the new base
+      "/aa/",
+      // fields need to be rewritten
+      ["url"]
+    )
+
+    expect(newRes).toEqual({
+      "url": "/aa/a.png",
+      "a": "b.png"
+    })
+  })
 
   it ('should remap all nested paths to absolute path', () => {
     const original = [
