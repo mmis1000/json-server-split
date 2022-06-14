@@ -1,0 +1,3 @@
+export = {
+  "seed": "tests4"
+}

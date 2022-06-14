@@ -144,6 +144,13 @@ describe('test server 1', () => {
     })
   })
 
+  it ('should return a valid response for ts file', async () => {
+    const res = await (await fetch(`http://localhost:${port}/test4`)).json()
+    expect(res).toEqual({
+      "seed": "tests4"
+    })
+  })
+
   it ('should have registered custom routes', async () => {
     const res = await (await fetch(`http://localhost:${port}/now`)).json()
     expect(typeof res.time).toEqual('string')
@@ -196,6 +203,7 @@ describe('test server 2', () => {
 
   it ('should have middleware in dir applied properly', async () => {
     const headers = (await fetch(`http://localhost:${port}/now`)).headers
+    expect(headers.get('X-Ts-By')).toEqual('TsNode')
     expect(headers.get('X-Potato-Baked-By')).toEqual('Intel')
     expect(headers.get('X-Cookie-Baked-By')).toEqual('Grandma')
   })
