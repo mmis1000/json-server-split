@@ -293,6 +293,26 @@ describe('test reload', () => {
     expect(res.newProp).toEqual('AAA')
   })
 
+  it ('should modified db ts on the fly', async () => {
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/db/test.ts'),
+      `
+        export = {
+          "seed": "modified-tests4"
+        }
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+
+    const res = await (await fetch(`http://localhost:${port}/test`)).json()
+    expect(res).toEqual({
+      "seed": "modified-tests4"
+    })
+  })
+
   it ('should change routes on the fly', async () => {
     await new Promise(r => setTimeout(r, 500))
 

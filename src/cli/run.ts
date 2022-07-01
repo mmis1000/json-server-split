@@ -400,6 +400,13 @@ export default async function (argv: Argv) {
 
     // Watch files
     if (argv.watch) {
+      let service: import('ts-node').Service
+
+      try {
+        const tsNode = require('ts-node') as typeof import('ts-node')
+        service = tsNode.create()
+      } catch (err) {}
+
       console.log(gray('  Watching...'))
       console.log()
       const source = argv._[0]
@@ -430,7 +437,7 @@ export default async function (argv: Argv) {
                   console.log(green(`  Read error has been fixed :)`))
                   readErrors.delete(watchedFile)
                 }
-              } catch (e) {
+              } catch (e: any) {
                 readErrors.add(watchedFile)
                 console.log(red(`  Error reading ${watchedFile}`))
                 console.error(e.message)
@@ -439,13 +446,16 @@ export default async function (argv: Argv) {
             } else /* if (JS(watchedFile)) */ {
               try {
                 const file = readFileSync(watchedFile, 'utf-8')
-                new vm.Script(file, { filename: file })
+                const fileTransformed = watchedFile.endsWith('.ts') 
+                  ? service.compile(file, watchedFile) 
+                  : file
+                new vm.Script(fileTransformed, { filename: watchedFile })
 
                 if (readErrors.has(watchedFile)) {
                   console.log(green(`  Read error has been fixed :)`))
                   readErrors.delete(watchedFile)
                 }
-              } catch (e) {
+              } catch (e: any) {
                 readErrors.add(watchedFile)
                 console.log(red(`  Error reading ${watchedFile}`))
                 console.error(e.stack)
