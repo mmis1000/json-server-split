@@ -4,7 +4,7 @@
   "description": "",
   "main": "./lib/index.js",
   "scripts": {
-    "test": "jest",
+    "test": "npm run build && jest",
     "build": "tsc",
     "watch": "tsc --watch",
     "prepublishOnly": "npm build ."

@@ -292,6 +292,66 @@ describe('test reload', () => {
     const res = await (await fetch(`http://localhost:${port}/now`)).json()
     expect(res.newProp).toEqual('AAA')
   })
+  it ('should handle corrupted middleware nicely', async () => {
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/middlewares/server-type.js'),
+      `
+        this is fucked up
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/middlewares/server-type.js'),
+      `
+        // hello.js 
+        module.exports = (req, res, next) => {
+          res.header('X-Powered-By', 'Tomato')
+          next()
+        }
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+
+    const headers = (await fetch(`http://localhost:${port}/now`)).headers
+    expect(headers.get('X-Powered-By')).toEqual('Tomato')
+  })
+
+
+  it ('should handle corrupted routers nicely', async () => {
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/routers/now.js'),
+      `
+        this contains an error
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/routers/now.js'),
+      `
+        module.exports = function (req, res) {
+          res.jsonp({
+            time: new Date().toISOString(),
+            random: Math.random(),
+            newProp: 'AAA'
+          })
+        }
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+
+    const res = await (await fetch(`http://localhost:${port}/now`)).json()
+    expect(res.newProp).toEqual('AAA')
+  })
 
   it ('should modified db ts on the fly', async () => {
     await new Promise(r => setTimeout(r, 500))
@@ -350,6 +410,40 @@ describe('test reload', () => {
       "readme": `http://localhost:${port}/assets/test.txt`,
       "thumb": `http://localhost:${port}/a.png`,
       "title": `http://localhost:${port}/test`
+    })
+  })
+
+  it ('assets url works after server reload', async () => {
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/routers/now.js'),
+      `
+        this contains an error
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/routers/now.js'),
+      `
+        module.exports = function (req, res) {
+          res.jsonp({
+            time: new Date().toISOString(),
+            random: Math.random(),
+            newProp: 'AAA'
+          })
+        }
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+    const res = await (await fetch(`http://localhost:${port}/resources`)).json()
+    expect(res).toEqual({
+      "readme": `http://localhost:${port}/assets/test.txt`,
+      "thumb": `http://localhost:${port}/a.png`,
+      "title": `test`
     })
   })
 

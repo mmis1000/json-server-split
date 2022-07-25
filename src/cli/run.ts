@@ -209,22 +209,40 @@ export default async function (argv: Argv) {
 
     pendingRestart++
     serverRestartQueue = serverRestartQueue
-    .then(() => new Promise<void>((resolve, reject) => {
-      pendingRestart--
+    .then(() => {
+      return start(true)
+    })
+    .catch((e) => {
+      console.error(red('Failed to construct new server'))
+      console.error(e.stack)
+      throw e
+    })
+    .then(([startServer]) =>  {
       if (server) {
-        server && server.destroy(() => {
-          server = undefined
-          start(true).then(() => resolve()).catch(reject)
+        return new Promise((resolve, reject) => {
+          server && server.destroy(() => {
+            console.log('Old server stopped')
+            server = undefined
+            return startServer().then(resolve, (err: Error) => {
+              console.error(red('Failed to start new server but old is killed'))
+              reject(err)
+            })
+          })
         })
       } else {
         // looks like we didn't start the server successfully last time
-        start(true).then(() => resolve()).catch(reject)
+        return startServer().catch((err) => {
+          console.error(red('Failed to start new server'))
+          throw err
+        })
       }
-    }))
+    })
     .catch((e) => {
-      server = undefined
-      console.error(red('Failed to start server'))
+      console.error(red('Reload failed'))
       console.error(e.stack)
+    })
+    .then(() => {
+      pendingRestart--
     })
   }
 
@@ -233,14 +251,14 @@ export default async function (argv: Argv) {
 
     console.log(gray('  Loading', source))
 
-    server = undefined
+    // server = undefined
 
     // create db and load object, JSON file, JS or HTTP database
     const sourceAdapter = await load(String(source))
     const db = low.default(sourceAdapter as unknown as low.AdapterSync)
 
     // Load additional routes
-    let routes
+    let routes: Record<string, any> = {}
     if (argv.routes) {
       console.log(gray(`  Loading routes ${argv.routes}`))
       routes = JSON.parse(readFileSync(argv.routes, 'utf-8'))
@@ -336,41 +354,45 @@ export default async function (argv: Argv) {
     // Create app and server
     app = createApp(db, routes, middlewares, routers, assetsFixUpMap, hooks, hooksCtx, argv)
 
-    await new Promise<void>(resolve => {
-      // HOOK: ServerStart
-      runHook(HookNames.ServerStart, hooks, hooksCtx, () => {
-        server = app.listen(argv.port, argv.host, resolve)
-        hooksCtx.server = server
+    const finalizeStart = async () => {
+      await new Promise<void>((resolve, reject) => {
+        // HOOK: ServerStart
+        runHook(HookNames.ServerStart, hooks, hooksCtx, () => {
+          server = app.listen(argv.port, argv.host, resolve)
+          server.once('error', reject)
+          hooksCtx.server = server
+        })
       })
-    })
-
-    // Enhance with a destroy function
-    enableDestroy(server!)
-
-    // Display server information
-    prettyPrint(argv, db.getState(), routes, routers, assetsFixUpMap)
-
-    // Catch and handle any error occurring in the server process.
-    // This should only be applied at first run, so a flag is required to indicate that.
-    if (!isRestart) {
-      process.on('uncaughtException', (error: any) => {
-        if (error.errno === 'EADDRINUSE')
-          console.log(
-            red(
-              `Cannot bind to the port ${error.port}. Please specify another port number either through --port argument or through the json-server.json configuration file`
+  
+      // Enhance with a destroy function
+      enableDestroy(server!)
+  
+      // Display server information
+      prettyPrint(argv, db.getState(), routes, routers, assetsFixUpMap)
+  
+      // Catch and handle any error occurring in the server process.
+      // This should only be applied at first run, so a flag is required to indicate that.
+      if (!isRestart) {
+        process.on('uncaughtException', (error: any) => {
+          if (error.code === 'EADDRINUSE')
+            console.log(
+              red(
+                `Cannot bind to the port ${error.port}. Please specify another port number either through --port argument or through the json-server.json configuration file`
+              )
             )
-          )
-        else
-          console.log('Some error occurred', error)
-        process.exit(1)
-      })
+          else
+            console.log('Some error occurred', error)
+          process.exit(1)
+        })
+      }
     }
-
-    return [sourceAdapter, db, hooks, hooksCtx] as const
+    return [finalizeStart, sourceAdapter, db, hooks, hooksCtx] as const
   }
 
   try {
-    const [sourceAdapter, db, hooks, hooksCtx] = await start()
+    const [finalize, sourceAdapter, db, hooks, hooksCtx] = await start()
+
+    await finalize()
 
     // Snapshot
     console.log(
