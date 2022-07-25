@@ -313,7 +313,7 @@ assets-map.json
 
 ```json
 {
-  "/assets/*": ["thumbs/url", "images/*"]
+  "/assets/*": ["thumbs.url", "images.*"]
 }
 ```
 
@@ -458,7 +458,7 @@ import { createRender } from '@mmis1000/json-server-split'
 
 const render = createRender(
   {
-    "/assets/*": ["thumbs/url", "images/*"]
+    "/assets/*": ["thumbs.url", "images.*"]
   },
   argv["assets-url-base"],
   argv["assets-url-header"]
