@@ -157,6 +157,13 @@ describe('test server 1', () => {
     expect(typeof res.random).toEqual('number')
   })
 
+  it ('should have registered custom routes with __esModule flag', async () => {
+    const res = await (await fetch(`http://localhost:${port}/now2`)).json()
+    expect(typeof res.time).toEqual('string')
+    expect(typeof res.random).toEqual('number')
+  })
+
+
   it ('should alias custom routes', async () => {
     const res = await (await fetch(`http://localhost:${port}/time`)).json()
     expect(typeof res.time).toEqual('string')
@@ -206,6 +213,11 @@ describe('test server 2', () => {
     expect(headers.get('X-Ts-By')).toEqual('TsNode')
     expect(headers.get('X-Potato-Baked-By')).toEqual('Intel')
     expect(headers.get('X-Cookie-Baked-By')).toEqual('Grandma')
+  })
+
+  it ('should have middleware in dir with __esModule flag applied properly', async () => {
+    const headers = (await fetch(`http://localhost:${port}/now`)).headers
+    expect(headers.get('X-Imports-As')).toEqual('EsModule')
   })
 })
 

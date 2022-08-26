@@ -22,6 +22,24 @@ import load from './utils/load'
 const shimApp = (e: express.Application) => 
   e as express.Application & { db: low.LowdbSync<any>, currentJSONRouter: express.RequestHandler }
 
+/**
+ * 
+ * @param {unknown} obj 
+ */
+ const importDefault = (obj: unknown) => {
+  if (
+    obj != null
+    && typeof obj === 'object'
+    && '__esModule' in obj
+    && (obj as { __esModule: unknown })['__esModule'] === true
+    && (obj as { default?: unknown }).default != null
+  ) {
+    return (obj as { default?: unknown }).default
+  } else {
+    return obj
+  }
+}
+
 function runHook(
   name: HookNames,
   hooks: Hooks[],
@@ -276,7 +294,7 @@ export default async function (argv: Argv) {
           console.log(gray('    Adding ', resolved))
           const scriptPath = require.resolve(resolved)
           delete require.cache[scriptPath]
-          return [require(scriptPath)]
+          return [importDefault(require(scriptPath)) as (...args: any[]) => void]
         } else {
           const routes: express.RequestHandler[] = []
           const files = readdirSync(resolved).filter(it => /\.[jt]s$/.test(it))
@@ -286,7 +304,7 @@ export default async function (argv: Argv) {
             console.log(gray('    Adding ', fullPath))
             const scriptPath = require.resolve(fullPath)
             delete require.cache[scriptPath]
-            routes.push(require(scriptPath))
+            routes.push(importDefault(require(scriptPath)) as (...args: any[]) => void)
           }
           return routes
         }
@@ -305,7 +323,7 @@ export default async function (argv: Argv) {
         const relativePath = join(argv.routers!, s)
         const scriptPath = require.resolve(resolve(relativePath))
         delete require.cache[scriptPath]
-        const handler = require(scriptPath)
+        const handler = importDefault(require(scriptPath)) as (...args: any[]) => void
         console.log(gray(`    Adding route ${route} from ${relativePath}`))
         return {
           route,

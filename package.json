@@ -14,7 +14,7 @@
   "repository": "https://github.com/mmis1000/json-server-split",
   "bin": "./lib/cli/bin.js",
   "dependencies": {
-    "@mmis1000/lowdb-split-json-adapter": "^0.2.2",
+    "@mmis1000/lowdb-split-json-adapter": "^0.2.3",
     "chalk": "^4.1.2",
     "chokidar": "^3.5.3",
     "connect-pause": "^0.1.0",
