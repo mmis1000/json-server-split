@@ -213,7 +213,7 @@ function writeDbDefinition (
   for (const filePath of dbFiles) {
     const name = filePath.replace(/(\.template)?\.([jt]s|json)$/i, '')
     const keepExtension = /\.json$/i.test(filePath)
-    const data = require(join(resolvedDbFolderPath, name))
+    const data = require(join(resolvedDbFolderPath, filePath))
     info[name] = {
       hasDefault: data.__esModule === true,
       keepExtension,
@@ -322,9 +322,9 @@ export default async function (argv: Argv) {
     const sourceAdapter = await load(String(source))
     const db = low.default(sourceAdapter as unknown as low.AdapterSync)
 
-    if (argv['generates-ts-definition']) {
-      console.log(gray(`  Writing definition file ${argv['generates-ts-definition']}`))
-      writeDbDefinition(String(source), argv['generates-ts-definition'])
+    if (argv['generate-ts-definition']) {
+      console.log(gray(`  Writing definition file ${argv['generate-ts-definition']}`))
+      writeDbDefinition(String(source), argv['generate-ts-definition'])
     }
 
     // Load additional routes
@@ -571,9 +571,9 @@ export default async function (argv: Argv) {
               gray(`  ${file} has changed, reloading...`)
             )
 
-            if (argv['generates-ts-definition']) {
-              console.log(gray(`  Writing definition file ${argv['generates-ts-definition']}`))
-              writeDbDefinition(String(source), argv['generates-ts-definition'])
+            if (argv['generate-ts-definition']) {
+              console.log(gray(`  Writing definition file ${argv['generate-ts-definition']}`))
+              writeDbDefinition(String(source), argv['generate-ts-definition'])
             }
 
             // server && server.destroy(() => start())

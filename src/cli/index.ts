@@ -20,8 +20,8 @@ const pathKeys: (keyof Argv)[] = [
   'routers',
   'hooks',
 
-  'generatesTsDefinition',
-  'generates-ts-definition'
+  'generateTsDefinition',
+  'generate-ts-definition'
 ]
 
 export default function () {
@@ -151,7 +151,7 @@ export default function () {
         array: true,
         description: 'File or Dir that contains custom hook for alter the server ability',
       },
-      generatesTsDefinition: {
+      'generate-ts-definition': {
         type: 'string',
         description: 'Generate typescript definition of db file at specified position',
       },

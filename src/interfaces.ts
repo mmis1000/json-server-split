@@ -38,8 +38,8 @@ export interface Argv {
   middlewares?: string[]
   hooks?: string[]
 
-  generatesTsDefinition?: string
-  'generates-ts-definition'?: string
+  generateTsDefinition?: string
+  'generate-ts-definition'?: string
 }
 
 type HookMapper<Types extends string> = `pre_${Types}` |  `post_${Types}`

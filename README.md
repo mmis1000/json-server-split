@@ -72,7 +72,7 @@ Options:
                                  rewrite                                [string]
       --hooks                    File or Dir that contains custom hook for alter
                                  the server ability                      [array]
-      --generatesTsDefinition    Generate typescript definition of db file at
+      --generate-ts-definition   Generate typescript definition of db file at
                                  specified position                     [string]
       --migrate                  this option is used to convent the existing
                                  db.json file into new structure and exits

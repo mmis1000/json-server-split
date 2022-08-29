@@ -10,6 +10,7 @@ interface Database {
   test3: typeof import(\\"./db/test3\\")
   test4: typeof import(\\"./db/test4\\")
   test5: typeof import(\\"./db/test5\\")[\\"default\\"]
+  test6: typeof import(\\"./db/test6.template\\")[\\"default\\"]
 }
 
 export default Database
