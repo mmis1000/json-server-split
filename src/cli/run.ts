@@ -228,7 +228,7 @@ function writeDbDefinition (
   ) {
     const relativePath = './' + relative(dirname(definitionFilePath), item.filePath).replace(/\\/g, '/')
     const fixedPath = item.keepExtension ? relativePath : relativePath.replace(/\.[^.]+$/, '')
-    const isValidIdentifier = /[0-9a-zA-Z_]/.test(propertyName)
+    const isValidIdentifier = /^[0-9a-zA-Z_]+$/.test(propertyName)
 
     return `  ${isValidIdentifier ? propertyName : JSON.stringify(propertyName)}: `
       + `typeof import(${JSON.stringify(fixedPath)})${item.hasDefault ? '[\"default\"]' : ''}`
