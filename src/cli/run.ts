@@ -236,7 +236,7 @@ function writeDbDefinition (
 
   const pairs = Object.entries(info).sort((i, j) => i[0] === j[0] ? 0 : i[0] < j[0] ? -1 : 1)
 
-  let definition = `// eslint-disable
+  let definition = `/* eslint-disable */
 // THIS FILE IS AUTO GENERATED, DO NOT MODIFY
 interface Database {
 ${pairs.map(p => formatItem(resolvedDefinitionFilePath, p[0], p[1]) + '\n').join('')}}
