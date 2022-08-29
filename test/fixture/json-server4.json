@@ -1,0 +1,4 @@
+{
+  "watch": true,
+  "generates-ts-definition": "definition.ts"
+}

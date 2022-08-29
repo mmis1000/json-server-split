@@ -479,3 +479,54 @@ describe('test reload', () => {
     expect(res.secret).toEqual(payload)
   })
 })
+
+describe('test definition generation', () => {
+  /**
+   * @type { import('child_process').ChildProcess }
+  */
+  let subProcess
+
+  beforeEach(() => {
+    copyFolderSync(
+      path.resolve(__dirname, './fixture'),
+      path.resolve(__dirname, './tmp')
+    )
+
+    subProcess = child_process.fork(
+      path.resolve(__dirname, '../lib/cli/bin.js'),
+      [
+        '--config', path.resolve(__dirname, './tmp/json-server4.json'),
+        '--port', port,
+        '--quiet',
+        path.resolve(__dirname, './tmp/db')
+      ],
+      {}
+    )
+
+    return new Promise(resolve => {
+      subProcess.on('message', m => {
+        if (m.type === 'ready') {
+          resolve()
+        }
+      })
+    })
+  })
+
+  afterEach(async () => {
+    await new Promise(resolve => {
+      subProcess.once('exit', resolve)
+      subProcess.kill('SIGINT')
+    })
+
+    fs.rmSync(path.resolve(__dirname, './tmp'), { recursive: true })
+  })
+
+  it ('should generate definition properly', async () => {
+    const data = fs.readFileSync(
+      path.resolve(__dirname, './tmp/definition.ts'),
+      { encoding: 'utf8' }
+    )
+
+    expect(data).toMatchSnapshot()
+  })
+})

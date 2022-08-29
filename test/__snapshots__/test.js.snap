@@ -1,0 +1,17 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`test definition generation should generate definition properly 1`] = `
+"// eslint-disable
+// THIS FILE IS AUTO GENERATED, DO NOT MODIFY
+interface Database {
+  resources: typeof import(\\"./db/resources.json\\")
+  test: typeof import(\\"./db/test.json\\")
+  test2: typeof import(\\"./db/test2.json\\")
+  test3: typeof import(\\"./db/test3\\")
+  test4: typeof import(\\"./db/test4\\")
+  test5: typeof import(\\"./db/test5\\")[\\"default\\"]
+}
+
+export default Database
+"
+`;

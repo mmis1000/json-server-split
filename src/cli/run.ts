@@ -8,7 +8,7 @@ import { parse } from 'json-parse-helpfulerror'
 import type { MiddlewaresOptions } from 'json-server'
 import { isEqual } from 'lodash'
 import * as low from 'lowdb'
-import { join, relative, resolve } from 'path'
+import { join, relative, resolve, dirname } from 'path'
 import enableDestroy from 'server-destroy'
 import vm from 'vm'
 import { HookNames } from '../constants'
@@ -198,6 +198,53 @@ function createApp(
   return app
 }
 
+function writeDbDefinition (
+  dbFolderPath: string,
+  definitionFilePath: string
+) {
+  const resolvedDbFolderPath = resolve(dbFolderPath)
+  const resolvedDefinitionFilePath = resolve(definitionFilePath)
+
+  const files = readdirSync(resolvedDbFolderPath)
+  const dbFiles = files.filter(f => JS(f) || (FILE(f) && !f.endsWith('.snapshot.json')))
+
+  const info: Record<string, { hasDefault: boolean, filePath: string, keepExtension: boolean }> = {}
+
+  for (const filePath of dbFiles) {
+    const name = filePath.replace(/(\.template)?\.([jt]s|json)$/i, '')
+    const keepExtension = /\.json$/i.test(filePath)
+    const data = require(join(resolvedDbFolderPath, name))
+    info[name] = {
+      hasDefault: data.__esModule === true,
+      keepExtension,
+      filePath: join(resolvedDbFolderPath, filePath)
+    }
+  }
+
+  function formatItem (
+    definitionFilePath: string,
+    propertyName: string,
+    item: { hasDefault: boolean, keepExtension: boolean,filePath: string }
+  ) {
+    const relativePath = './' + relative(dirname(definitionFilePath), item.filePath).replace(/\\/g, '/')
+    const fixedPath = item.keepExtension ? relativePath : relativePath.replace(/\.[^.]+$/, '')
+    const isValidIdentifier = /[0-9a-zA-Z_]/.test(propertyName)
+
+    return `  ${isValidIdentifier ? propertyName : JSON.stringify(propertyName)}: `
+      + `typeof import(${JSON.stringify(fixedPath)})${item.hasDefault ? '[\"default\"]' : ''}`
+  }
+
+  const pairs = Object.entries(info).sort((i, j) => i[0] === j[0] ? 0 : i[0] < j[0] ? -1 : 1)
+
+  let definition = `// eslint-disable
+// THIS FILE IS AUTO GENERATED, DO NOT MODIFY
+interface Database {
+${pairs.map(p => formatItem(resolvedDefinitionFilePath, p[0], p[1]) + '\n').join('')}}
+
+export default Database
+`
+  writeFileSync(definitionFilePath, definition)
+}
 export default async function (argv: Argv) {
   const source = argv._[0]
   let app: express.Application
@@ -274,6 +321,11 @@ export default async function (argv: Argv) {
     // create db and load object, JSON file, JS or HTTP database
     const sourceAdapter = await load(String(source))
     const db = low.default(sourceAdapter as unknown as low.AdapterSync)
+
+    if (argv['generates-ts-definition']) {
+      console.log(gray(`  Writing definition file ${argv['generates-ts-definition']}`))
+      writeDbDefinition(String(source), argv['generates-ts-definition'])
+    }
 
     // Load additional routes
     let routes: Record<string, any> = {}
@@ -503,6 +555,7 @@ export default async function (argv: Argv) {
               }
             }
           } else {
+            readErrors.delete(watchedFile)
             console.log(
               gray(`  ${file} has been removed`)
             )
@@ -517,6 +570,11 @@ export default async function (argv: Argv) {
             console.log(
               gray(`  ${file} has changed, reloading...`)
             )
+
+            if (argv['generates-ts-definition']) {
+              console.log(gray(`  Writing definition file ${argv['generates-ts-definition']}`))
+              writeDbDefinition(String(source), argv['generates-ts-definition'])
+            }
 
             // server && server.destroy(() => start())
             // restartServer()
