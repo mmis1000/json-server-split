@@ -10,12 +10,7 @@ export default (routers: RouteInfo[]) => {
   })
 
   for (let info of routers) {
-    try {
-      router.use(info.route, info.handler)
-    } catch (err) {
-      console.error(inspect(err))
-      process.exit(1)
-    }
+    router.use(info.route, info.handler)
   }
 
   return router

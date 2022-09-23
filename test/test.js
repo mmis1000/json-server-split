@@ -239,7 +239,6 @@ describe('test reload', () => {
       [
         '--config', path.resolve(__dirname, './tmp/json-server.json'),
         '--port', port,
-        '--quiet',
         path.resolve(__dirname, './tmp/db')
       ],
       {}
@@ -333,8 +332,67 @@ describe('test reload', () => {
     expect(headers.get('X-Powered-By')).toEqual('Tomato')
   })
 
+  it ('should handle bad middleware nicely', async () => {
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/middlewares/server-type.js'),
+      `
+        module.exports = {}
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/middlewares/server-type.js'),
+      `
+        // hello.js 
+        module.exports = (req, res, next) => {
+          res.header('X-Powered-By', 'Tomato')
+          next()
+        }
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+
+    const headers = (await fetch(`http://localhost:${port}/now`)).headers
+    expect(headers.get('X-Powered-By')).toEqual('Tomato')
+  })
 
   it ('should handle corrupted routers nicely', async () => {
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/routers/now.js'),
+      `
+        module.exports = {}
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/routers/now.js'),
+      `
+        module.exports = function (req, res) {
+          res.jsonp({
+            time: new Date().toISOString(),
+            random: Math.random(),
+            newProp: 'AAA'
+          })
+        }
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+
+    const res = await (await fetch(`http://localhost:${port}/now`)).json()
+    expect(res.newProp).toEqual('AAA')
+  })
+
+  it ('should handle bad routers nicely', async () => {
     await new Promise(r => setTimeout(r, 500))
 
     fs.writeFileSync(
