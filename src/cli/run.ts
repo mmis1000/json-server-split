@@ -589,6 +589,11 @@ export default async function (argv: Argv) {
               (newRouter.db._ as unknown as Record<string, string>).id = argv.id
               shimApp(app).db = newRouter.db
 
+              // copy the map to newly created router
+              if (argv['assets-url-map']) {
+                (newRouter as any).render = (shimApp(app).currentJSONRouter as any).render
+              }
+
               runHook(HookNames.JSONRouterReload, hooks, hooksCtx, () => {
                 shimApp(app).currentJSONRouter = newRouter
                 hooksCtx.router = newRouter

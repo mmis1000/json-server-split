@@ -483,6 +483,30 @@ describe('test reload', () => {
     })
   })
 
+  it ('should apply assets url map on newly added files', async () => {
+    await new Promise(r => setTimeout(r, 500))
+
+    fs.writeFileSync(
+      path.resolve(__dirname, './tmp/db/resources1.json'),
+      `
+        {
+          "readme": "assets/test.txt",
+          "thumb": "b.png",
+          "title": "test1"
+        }
+      `
+    )
+
+    await new Promise(r => setTimeout(r, 500))
+    
+    const res = await (await fetch(`http://localhost:${port}/resources1`)).json()
+    expect(res).toEqual({
+      "readme": `http://localhost:${port}/assets/test.txt`,
+      "thumb": `http://localhost:${port}/b.png`,
+      "title": `test1`
+    })
+  })
+
   it ('assets url works after server reload', async () => {
     await new Promise(r => setTimeout(r, 500))
 

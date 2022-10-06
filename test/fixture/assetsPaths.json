@@ -1,3 +1,4 @@
 {
-  "/resources": ["readme", "thumb"]
+  "/resources": ["readme", "thumb"],
+  "/resources1": ["readme", "thumb"]
 }
