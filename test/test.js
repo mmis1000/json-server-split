@@ -239,6 +239,7 @@ describe('test reload', () => {
       [
         '--config', path.resolve(__dirname, './tmp/json-server.json'),
         '--port', port,
+        '--quiet',
         path.resolve(__dirname, './tmp/db')
       ],
       {}
